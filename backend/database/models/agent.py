@@ -1,10 +1,11 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from . import associations
 from .base import Base
 
 
@@ -15,6 +16,13 @@ class Agent(Base):
         Uuid,
         primary_key=True,
         default=uuid4,
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
     )
 
     name: Mapped[str] = mapped_column(
@@ -32,9 +40,16 @@ class Agent(Base):
         nullable=False,
     )
 
-    model: Mapped[str] = mapped_column(
-        String(100),
+    model_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("ai_models.id"),
         nullable=False,
+        index=True,
+    )
+
+    model: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -54,11 +69,18 @@ class Agent(Base):
     conversations = relationship("Conversation", back_populates="agent")
     tools = relationship(
         "Tool",
-        secondary="agent_tools",
+        secondary=associations.agent_tools,
         back_populates="agents",
     )
     documents = relationship(
         "Document",
-        secondary="agent_documents",
+        secondary=associations.agent_documents,
         back_populates="agents",
     )
+    running_state = relationship(
+        "RunningAgent",
+        back_populates="agent",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    ai_model = relationship("AIModel")

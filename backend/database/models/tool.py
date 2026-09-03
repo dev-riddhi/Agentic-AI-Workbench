@@ -6,6 +6,7 @@ from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from .associations import agent_tools
 from .base import Base
 
 
@@ -36,6 +37,6 @@ class Tool(Base):
 
     agents = relationship(
         "Agent",
-        secondary="agent_tools",
+        secondary=agent_tools,
         back_populates="tools",
     )

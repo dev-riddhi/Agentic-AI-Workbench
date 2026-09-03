@@ -7,6 +7,7 @@ from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
+from .associations import agent_documents
 from .base import Base
 
 
@@ -42,6 +43,6 @@ class Document(Base):
 
     agents = relationship(
         "Agent",
-        secondary="agent_documents",
+        secondary=agent_documents,
         back_populates="documents",
     )
