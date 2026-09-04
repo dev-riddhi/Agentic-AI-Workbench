@@ -10,10 +10,16 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  Building2,
+  Sliders,
+  Database,
+  Save,
+  Key,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { User } from '@/lib/api/types';
 import { usersApi } from '@/lib/api/users';
+import { settingsApi } from '@/lib/api/settings';
 import { useToast } from '@/context/toast-context';
 
 export default function SettingsPage() {
@@ -30,12 +36,23 @@ export default function SettingsPage() {
   const [createSuccess, setCreateSuccess] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Endpoint configuration - start empty, using placeholder hint
-  const [apiEndpoint, setApiEndpoint] = useState('');
-  const [endpointSaved, setEndpointSaved] = useState(false);
+  // Settings Table State (BSON/JSON structure)
+  const [companyName, setCompanyName] = useState('Agentic AI Workbench');
+  const [maxConcurrentAgents, setMaxConcurrentAgents] = useState<number>(10);
+  const [apiUrl, setApiUrl] = useState('http://localhost:8000/api/v1');
+  const [environment, setEnvironment] = useState('development');
+  const [defaultTimeout, setDefaultTimeout] = useState<number>(60);
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [extraKVs, setExtraKVs] = useState<Array<{ key: string; value: string }>>([]);
+  const [newExtraKey, setNewExtraKey] = useState('');
+  const [newExtraValue, setNewExtraValue] = useState('');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
     let active = true;
+
+    // Load users
     usersApi.getUsers()
       .then((data) => {
         if (active) setUsers(data || []);
@@ -50,6 +67,29 @@ export default function SettingsPage() {
       })
       .finally(() => {
         if (active) setIsLoading(false);
+      });
+
+    // Load system settings from settings table
+    settingsApi.getSettings()
+      .then((res) => {
+        if (!active || !res?.data) return;
+        const d = res.data;
+        if (d.company_name) setCompanyName(d.company_name);
+        if (d.max_concurrent_agent_limit) setMaxConcurrentAgents(d.max_concurrent_agent_limit);
+        if (d.api_url) setApiUrl(d.api_url);
+        if (d.environment) setEnvironment(d.environment);
+        if (d.default_timeout_seconds) setDefaultTimeout(d.default_timeout_seconds);
+        if (typeof d.maintenance_mode === 'boolean') setMaintenanceMode(d.maintenance_mode);
+        if (d.extra_values && typeof d.extra_values === 'object') {
+          const kvs = Object.entries(d.extra_values).map(([k, v]) => ({
+            key: k,
+            value: typeof v === 'object' ? JSON.stringify(v) : String(v),
+          }));
+          setExtraKVs(kvs);
+        }
+      })
+      .catch(() => {
+        // Handled silently with defaults
       });
 
     return () => {
@@ -109,17 +149,272 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveEndpoint = (e: React.FormEvent) => {
+  const handleAddExtraKV = () => {
+    if (!newExtraKey.trim()) return;
+    setExtraKVs((prev) => [...prev, { key: newExtraKey.trim(), value: newExtraValue.trim() }]);
+    setNewExtraKey('');
+    setNewExtraValue('');
+  };
+
+  const handleRemoveExtraKV = (idx: number) => {
+    setExtraKVs((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('custom_api_url', apiEndpoint);
-    setEndpointSaved(true);
-    toast.success('API Gateway Target URL updated.', 'Settings Saved');
-    setTimeout(() => setEndpointSaved(false), 3000);
+    setIsSavingSettings(true);
+    try {
+      const extra_values: Record<string, unknown> = {};
+      for (const kv of extraKVs) {
+        if (kv.key.trim()) {
+          let parsedVal: unknown = kv.value;
+          try {
+            parsedVal = JSON.parse(kv.value);
+          } catch {
+            parsedVal = kv.value;
+          }
+          extra_values[kv.key.trim()] = parsedVal;
+        }
+      }
+
+      await settingsApi.updateSettings({
+        company_name: companyName.trim(),
+        max_concurrent_agent_limit: maxConcurrentAgents,
+        api_url: apiUrl.trim(),
+        environment,
+        default_timeout_seconds: defaultTimeout,
+        maintenance_mode: maintenanceMode,
+        extra_values,
+      });
+
+      // Keep local target synchronized
+      localStorage.setItem('custom_api_url', apiUrl.trim());
+
+      setSettingsSaved(true);
+      toast.success('Settings table updated in database.', 'Settings Persisted');
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Failed to persist settings to backend API.';
+      toast.error(detail, 'Update Failed');
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      {/* SECTION 1: USER PROFILE */}
+      {/* SECTION 1: SYSTEM & ORGANIZATION SETTINGS (BSON/JSON Structure) */}
+      <form onSubmit={handleSaveSettings} className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
+                System & Organization Settings
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                  BSON / JSONB
+                </span>
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Configuration stored in PostgreSQL/SQLite <code className="text-zinc-300 font-mono">settings</code> table
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSavingSettings}
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{isSavingSettings ? 'Saving...' : 'Save Settings'}</span>
+          </button>
+        </div>
+
+        {settingsSaved && (
+          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Settings successfully committed to the database!</span>
+          </div>
+        )}
+
+        {/* Core Settings Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Company Name */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              Company Name
+            </label>
+            <input
+              type="text"
+              required
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="e.g. Acme Corp / Agentic AI Workbench"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* Max Concurrent Agent Limit */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              Max Concurrent Agent Limit
+            </label>
+            <input
+              type="number"
+              min={1}
+              required
+              value={maxConcurrentAgents}
+              onChange={(e) => setMaxConcurrentAgents(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* Backend API URL */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              FastAPI Gateway URL (api_url)
+            </label>
+            <input
+              type="text"
+              required
+              value={apiUrl}
+              onChange={(e) => setApiUrl(e.target.value)}
+              placeholder="http://localhost:8000/api/v1"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* Environment */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              Environment
+            </label>
+            <select
+              value={environment}
+              onChange={(e) => setEnvironment(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            >
+              <option value="development">Development</option>
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+            </select>
+          </div>
+
+          {/* Default Timeout */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              Default Timeout (Seconds)
+            </label>
+            <input
+              type="number"
+              min={5}
+              value={defaultTimeout}
+              onChange={(e) => setDefaultTimeout(Math.max(5, parseInt(e.target.value) || 60))}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+
+          {/* Maintenance Mode Toggle */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-mono text-zinc-300 uppercase">
+              System Maintenance Mode
+            </label>
+            <div
+              onClick={() => setMaintenanceMode(!maintenanceMode)}
+              className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                maintenanceMode
+                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+              }`}
+            >
+              <div className="text-xs font-medium">
+                {maintenanceMode ? 'Maintenance Mode Enabled' : 'Operational (Normal)'}
+              </div>
+              <div
+                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                  maintenanceMode ? 'border-rose-400 bg-rose-400' : 'border-zinc-700 bg-zinc-900'
+                }`}
+              >
+                {maintenanceMode && <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Custom BSON Key-Values Section */}
+        <div className="pt-4 border-t border-zinc-800/80 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Key className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-xs font-mono font-bold text-zinc-300 uppercase">
+                Custom Key-Value Attributes (JSON Document)
+              </span>
+            </div>
+            <span className="text-[10px] font-mono text-zinc-500">
+              {extraKVs.length} custom attributes defined
+            </span>
+          </div>
+
+          {/* Existing Custom Key Values */}
+          {extraKVs.length > 0 ? (
+            <div className="space-y-2">
+              {extraKVs.map((kv, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono"
+                >
+                  <span className="text-cyan-400 font-bold min-w-[120px]">{kv.key}:</span>
+                  <span className="text-zinc-300 flex-1 truncate">{kv.value}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveExtraKV(idx)}
+                    className="p-1 rounded text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-[11px] font-mono text-zinc-500 text-center">
+              No custom attributes yet. Add extensible key-value pairs below.
+            </div>
+          )}
+
+          {/* Add New Key-Value Pair Form */}
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <input
+              type="text"
+              value={newExtraKey}
+              onChange={(e) => setNewExtraKey(e.target.value)}
+              placeholder="Key (e.g. cluster_region)"
+              className="flex-1 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            />
+            <input
+              type="text"
+              value={newExtraValue}
+              onChange={(e) => setNewExtraValue(e.target.value)}
+              placeholder="Value (e.g. us-east-1 or true)"
+              className="flex-1 px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+            />
+            <button
+              type="button"
+              onClick={handleAddExtraKV}
+              className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Attribute</span>
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {/* SECTION 2: USER PROFILE */}
       <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400">
@@ -159,7 +454,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* SECTION 2: ADMIN USER MANAGEMENT TABLE */}
+      {/* SECTION 3: ADMIN USER MANAGEMENT TABLE */}
       <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -279,52 +574,6 @@ export default function SettingsPage() {
           </form>
         </div>
       </div>
-
-      {/* SECTION 3: LOCAL ENDPOINT CONFIGURATION */}
-      <form onSubmit={handleSaveEndpoint} className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400">
-            <Server className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-zinc-100">Local API Gateway Target</h3>
-            <p className="text-xs text-zinc-400">
-              FastAPI backend endpoint URL configured for this workstation
-            </p>
-          </div>
-        </div>
-
-        {endpointSaved && (
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Endpoint configuration saved!</span>
-          </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-            FASTAPI BASE URL
-          </label>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={apiEndpoint}
-              onChange={(e) => setApiEndpoint(e.target.value)}
-              placeholder="e.g. http://localhost:8000/api/v1"
-              className="flex-1 px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 placeholder:text-zinc-600"
-            />
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors cursor-pointer"
-            >
-              Update Target
-            </button>
-          </div>
-          <p className="text-[11px] text-zinc-500 mt-1.5 font-mono">
-            Default: <code className="text-zinc-400">http://localhost:8000/api/v1</code>
-          </p>
-        </div>
-      </form>
     </div>
   );
 }

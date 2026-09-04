@@ -26,9 +26,11 @@ from database.models.tool import Tool
 from database.models.document import Document
 from database.models.conversation import Conversation
 from database.models.refresh_token import RefreshToken
-from database.models.running_agent import RunningAgent
 from database.models.ai_model import AIModel
-from database.models.associations import agent_tools, agent_documents
+from database.models.agent_tools import agent_tools
+from database.models.agent_documents import agent_documents
+from database.models.setting import Setting
+from database.models.runtime import Runtime
 
 
 target_metadata = Base.metadata

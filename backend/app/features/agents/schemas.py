@@ -25,16 +25,7 @@ class DocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class RunningAgentResponse(BaseModel):
-    id: UUID
-    agent_id: UUID
-    status: str
-    auto_restart: bool
-    started_at: datetime
-    last_heartbeat: datetime
-    configuration: str | None = None
-
-    model_config = ConfigDict(from_attributes=True)
+from database.models.agent import AgentTrigger
 
 
 class AgentBase(BaseModel):
@@ -48,6 +39,15 @@ class AgentBase(BaseModel):
         ...,
         validation_alias=AliasChoices("model_id", "ai_model_id"),
     )
+    trigger: AgentTrigger = Field(
+        default=AgentTrigger.MANUAL,
+        validation_alias=AliasChoices("trigger", "trigger_type"),
+    )
+    schedule: str | None = None
+    max_execution_time: int = 10
+    max_tool_calls: int = 50
+    concurrency: int = 1
+    retries: int = 3
 
 
 class AgentCreate(AgentBase):
@@ -66,6 +66,15 @@ class AgentUpdate(BaseModel):
         None,
         validation_alias=AliasChoices("model_id", "ai_model_id"),
     )
+    trigger: AgentTrigger | None = Field(
+        None,
+        validation_alias=AliasChoices("trigger", "trigger_type"),
+    )
+    schedule: str | None = None
+    max_execution_time: int | None = None
+    max_tool_calls: int | None = None
+    concurrency: int | None = None
+    retries: int | None = None
     tools: list[str] | None = None
     document_ids: list[UUID] | None = None
 
@@ -79,11 +88,17 @@ class AgentResponse(BaseModel):
     model_id: UUID
     model: str | None = None
     ai_model: AIModelResponse | None = None
+    trigger: AgentTrigger = AgentTrigger.MANUAL
+    schedule: str | None = None
+    max_execution_time: int = 10
+    max_tool_calls: int = 50
+    concurrency: int = 1
+    retries: int = 3
+    is_running: bool = False
     created_at: datetime
     updated_at: datetime
     tools: list[ToolResponse] = []
     documents: list[DocumentResponse] = []
-    running_state: RunningAgentResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

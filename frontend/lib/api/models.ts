@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { AIModelResponse } from './types';
+import { AIModelResponse, LlamaServerStatusResponse, ModelRuntimeStatus } from './types';
 
 export interface ModelDownloadPayload {
   repo_id: string;
@@ -9,6 +9,13 @@ export interface ModelDownloadPayload {
 }
 
 export const modelsApi = {
+  checkLlamaStatus: async (skip = 0, limit = 100): Promise<LlamaServerStatusResponse> => {
+    const response = await apiClient.get<LlamaServerStatusResponse>('/models/status', {
+      params: { skip, limit },
+    });
+    return response.data;
+  },
+
   getModels: async (skip = 0, limit = 100): Promise<AIModelResponse[]> => {
     const response = await apiClient.get<AIModelResponse[]>('/models/', {
       params: { skip, limit },
@@ -31,7 +38,56 @@ export const modelsApi = {
     return response.data;
   },
 
+  uploadModel: async (
+    file: File,
+    name?: string,
+    quantization?: string,
+    onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
+  ): Promise<AIModelResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (name) formData.append('name', name);
+    if (quantization) formData.append('quantization', quantization);
+
+    const response = await apiClient.post<AIModelResponse>('/models/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress,
+      timeout: 0,
+    });
+    return response.data;
+  },
+
   deleteModel: async (id: string): Promise<void> => {
     await apiClient.delete(`/models/${id}`);
+  },
+
+  startRuntime: async (payload: {
+    model: string;
+    port?: number;
+    host?: string;
+    ctx_size?: number;
+    n_gpu_layers?: number;
+  }): Promise<ModelRuntimeStatus> => {
+    const response = await apiClient.post<ModelRuntimeStatus>('/models/runtime/start', payload);
+    return response.data;
+  },
+
+  stopRuntime: async (): Promise<ModelRuntimeStatus> => {
+    const response = await apiClient.post<ModelRuntimeStatus>('/models/runtime/stop');
+    return response.data;
+  },
+
+  getRuntimeStatus: async (): Promise<ModelRuntimeStatus> => {
+    const response = await apiClient.get<ModelRuntimeStatus>('/models/runtime/status');
+    return response.data;
+  },
+
+  getRuntimeLogs: async (lines = 100): Promise<{ logs: string[] }> => {
+    const response = await apiClient.get<{ logs: string[] }>('/models/runtime/logs', {
+      params: { lines },
+    });
+    return response.data;
   },
 };

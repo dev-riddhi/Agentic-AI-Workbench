@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from .associations import agent_documents
+from .agent_documents import agent_documents
 from .base import Base
 
 

@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 import logging
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,24 +15,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # System startup: Recover agents marked as running with auto_restart enabled
-    with SessionLocal() as db:
-        try:
-            active_agents = get_running_agents(db, auto_restart_only=True)
-            if active_agents:
-                logger.info(
-                    f"[System Startup] Found {len(active_agents)} active agent(s) to automatically resume after restart."
-                )
-                for ra in active_agents:
-                    logger.info(f"[Auto-Restart] Resuming agent: {ra.agent_id}")
-            else:
-                logger.info("[System Startup] No running agents to resume.")
-        except Exception as exc:
-            logger.warning(f"[System Startup] Could not load running agents: {exc}")
-    yield
+    while(True):
+
+        await asyncio.sleep(60)
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,

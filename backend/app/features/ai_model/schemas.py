@@ -33,3 +33,22 @@ class AIModelResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LlamaServerStatusResponse(BaseModel):
+    installed: bool
+    message: str
+    server_path: str | None = None
+    models: list[AIModelResponse] = []
+
+
+class ModelRuntimeStartRequest(BaseModel):
+    model: str  # Can be UUID, model name, or path to .gguf
+    port: int = 8080
+    host: str = "127.0.0.1"
+    ctx_size: int = 4096
+    n_gpu_layers: int = 99
+    threads: int | None = None
+    wait_ready: bool = True
+    timeout: float = 30.0
+

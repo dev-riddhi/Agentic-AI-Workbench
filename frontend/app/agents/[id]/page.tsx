@@ -13,8 +13,9 @@ import {
   Clock,
   Settings,
   AlertCircle,
+  Sliders,
 } from 'lucide-react';
-import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse } from '@/lib/api/types';
+import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger } from '@/lib/api/types';
 import { agentsApi } from '@/lib/api/agents';
 import { modelsApi } from '@/lib/api/models';
 import { documentsApi } from '@/lib/api/documents';
@@ -79,6 +80,12 @@ export default function AgentWorkspacePage({
   const [configInstructions, setConfigInstructions] = useState('');
   const [configModelId, setConfigModelId] = useState('');
   const [configTools, setConfigTools] = useState<string[]>([]);
+  const [configTrigger, setConfigTrigger] = useState<AgentTrigger>('manual');
+  const [configSchedule, setConfigSchedule] = useState('');
+  const [configMaxExecutionTime, setConfigMaxExecutionTime] = useState(10);
+  const [configMaxToolCalls, setConfigMaxToolCalls] = useState(50);
+  const [configConcurrency, setConfigConcurrency] = useState(1);
+  const [configRetries, setConfigRetries] = useState(3);
   const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
 
   useEffect(() => {
@@ -99,6 +106,12 @@ export default function AgentWorkspacePage({
         setConfigInstructions(ag.instructions);
         setConfigModelId(ag.model_id);
         setConfigTools(ag.tools?.map((t) => t.name) || []);
+        setConfigTrigger(ag.trigger || 'manual');
+        setConfigSchedule(ag.schedule || '');
+        setConfigMaxExecutionTime(ag.max_execution_time ?? 10);
+        setConfigMaxToolCalls(ag.max_tool_calls ?? 50);
+        setConfigConcurrency(ag.concurrency ?? 1);
+        setConfigRetries(ag.retries ?? 3);
       } else {
         setNotFound(true);
       }
@@ -190,6 +203,7 @@ export default function AgentWorkspacePage({
     if (!isExecuting) return;
     try {
       await agentsApi.stopAgent(id, activeExecutionId || undefined);
+      setAgent((prev) => (prev ? { ...prev, is_running: false } : null));
       toast.info('Agent execution stopped by operator.', 'Run Stopped');
     } catch (err: unknown) {
       const detail =
@@ -221,6 +235,12 @@ export default function AgentWorkspacePage({
         instructions: configInstructions,
         model_id: configModelId,
         tools: configTools,
+        trigger: configTrigger,
+        schedule: (configTrigger === 'schedule' || configTrigger === 'onetime') ? configSchedule : undefined,
+        max_execution_time: configMaxExecutionTime,
+        max_tool_calls: configMaxToolCalls,
+        concurrency: configConcurrency,
+        retries: configRetries,
       });
       setAgent(updated);
       setConfigSaveSuccess(true);
@@ -337,9 +357,23 @@ export default function AgentWorkspacePage({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-zinc-100">{agent.name}</h2>
+              {agent.is_running && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Running
+                </span>
+              )}
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 {agent.model || agent.ai_model?.name || 'Local GGUF'}
               </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 capitalize">
+                {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
+              </span>
+              {agent.schedule && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  {agent.schedule}
+                </span>
+              )}
             </div>
             <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
               {agent.description || 'Agent Workspace Active'}
@@ -645,6 +679,103 @@ export default function AgentWorkspacePage({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
+              TRIGGER
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {(['manual', 'schedule', 'onetime'] as AgentTrigger[]).map((t) => (
+                <button
+                  type="button"
+                  key={t}
+                  onClick={() => setConfigTrigger(t)}
+                  className={`px-3 py-2 rounded-xl text-xs font-mono capitalize border transition-all cursor-pointer ${
+                    configTrigger === t
+                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 font-bold'
+                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                  }`}
+                >
+                  {t === 'onetime' ? 'one-time' : t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {(configTrigger === 'schedule' || configTrigger === 'onetime') && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
+                {configTrigger === 'schedule' ? 'SCHEDULE' : 'ONE-TIME EXECUTION'}
+              </label>
+              <input
+                type="text"
+                value={configSchedule}
+                onChange={(e) => setConfigSchedule(e.target.value)}
+                placeholder={
+                  configTrigger === 'schedule'
+                    ? 'e.g. Every 1 day at 09:00'
+                    : 'e.g. Once on 2026-09-05 at 09:00'
+                }
+                className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono"
+              />
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-zinc-800/80 space-y-3">
+            <label className="block text-xs font-bold text-zinc-200 font-mono uppercase">
+              Advanced Execution Settings
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  Maximum execution time (min)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={configMaxExecutionTime}
+                  onChange={(e) => setConfigMaxExecutionTime(parseInt(e.target.value) || 10)}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  Maximum tool calls
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={configMaxToolCalls}
+                  onChange={(e) => setConfigMaxToolCalls(parseInt(e.target.value) || 50)}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  Concurrency
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={configConcurrency}
+                  onChange={(e) => setConfigConcurrency(parseInt(e.target.value) || 1)}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  Retries
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={configRetries}
+                  onChange={(e) => setConfigRetries(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-zinc-800 flex justify-end">

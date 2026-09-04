@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from database.models import Agent, Document, RunningAgent, Tool
+from database.models import Agent, AgentTrigger, Document, Tool, Runtime
 
 
 def get_agents(
@@ -18,8 +18,8 @@ def get_agents(
         .options(
             selectinload(Agent.tools),
             selectinload(Agent.documents),
-            selectinload(Agent.running_state),
             selectinload(Agent.ai_model),
+            selectinload(Agent.runtime_instances),
         )
         .offset(skip)
         .limit(limit)
@@ -36,8 +36,8 @@ def get_agent(db: Session, agent_id: UUID) -> Agent | None:
         .options(
             selectinload(Agent.tools),
             selectinload(Agent.documents),
-            selectinload(Agent.running_state),
             selectinload(Agent.ai_model),
+            selectinload(Agent.runtime_instances),
         )
         .where(Agent.id == agent_id)
     )
@@ -85,6 +85,12 @@ def create_agent(
     instructions: str,
     model_id: UUID,
     model_name: str | None = None,
+    trigger: AgentTrigger = AgentTrigger.MANUAL,
+    schedule: str | None = None,
+    max_execution_time: int = 10,
+    max_tool_calls: int = 50,
+    concurrency: int = 1,
+    retries: int = 3,
     tools: list[Tool] | None = None,
     documents: list[Document] | None = None,
 ) -> Agent:
@@ -95,6 +101,12 @@ def create_agent(
         instructions=instructions,
         model_id=model_id,
         model=model_name,
+        trigger=trigger,
+        schedule=schedule,
+        max_execution_time=max_execution_time,
+        max_tool_calls=max_tool_calls,
+        concurrency=concurrency,
+        retries=retries,
     )
     if tools:
         agent.tools = tools
@@ -115,6 +127,12 @@ def update_agent(
     instructions: str | None = None,
     model_id: UUID | None = None,
     model_name: str | None = None,
+    trigger: AgentTrigger | None = None,
+    schedule: str | None = None,
+    max_execution_time: int | None = None,
+    max_tool_calls: int | None = None,
+    concurrency: int | None = None,
+    retries: int | None = None,
     tools: list[Tool] | None = None,
     documents: list[Document] | None = None,
 ) -> Agent:
@@ -128,6 +146,18 @@ def update_agent(
         agent.model_id = model_id
     if model_name is not None:
         agent.model = model_name
+    if trigger is not None:
+        agent.trigger = trigger
+    if schedule is not None:
+        agent.schedule = schedule
+    if max_execution_time is not None:
+        agent.max_execution_time = max_execution_time
+    if max_tool_calls is not None:
+        agent.max_tool_calls = max_tool_calls
+    if concurrency is not None:
+        agent.concurrency = concurrency
+    if retries is not None:
+        agent.retries = retries
     if tools is not None:
         agent.tools = tools
     if documents is not None:
@@ -149,52 +179,102 @@ def delete_agent(db: Session, agent: Agent) -> None:
 def set_agent_running(
     db: Session,
     agent_id: UUID,
-    status: str = "running",
-    auto_restart: bool = True,
-    configuration: str | None = None,
-) -> RunningAgent:
-    statement = select(RunningAgent).where(RunningAgent.agent_id == agent_id)
-    running_state = db.scalar(statement)
-    if running_state:
-        running_state.status = status
-        running_state.auto_restart = auto_restart
-        running_state.last_heartbeat = datetime.utcnow()
-        if configuration is not None:
-            running_state.configuration = configuration
+    is_running: bool = True,
+) -> Agent | None:
+    agent = db.scalar(select(Agent).where(Agent.id == agent_id))
+    if not agent:
+        return None
+    if is_running:
+        active_rt = db.scalar(select(Runtime).where(Runtime.agent_id == agent_id, Runtime.status == "running"))
+        if not active_rt:
+            rt = Runtime(agent_id=agent_id, status="running")
+            db.add(rt)
+            db.commit()
     else:
-        running_state = RunningAgent(
-            agent_id=agent_id,
-            status=status,
-            auto_restart=auto_restart,
-            configuration=configuration,
-        )
-        db.add(running_state)
-
-    db.commit()
-    db.refresh(running_state)
-    return running_state
+        set_agent_stopped(db, agent_id)
+    return agent
 
 
 def set_agent_stopped(db: Session, agent_id: UUID) -> bool:
-    statement = select(RunningAgent).where(RunningAgent.agent_id == agent_id)
-    running_state = db.scalar(statement)
-    if running_state:
-        db.delete(running_state)
-        db.commit()
-        return True
-    return False
+    statement = select(Runtime).where(Runtime.agent_id == agent_id)
+    runtimes = list(db.scalars(statement).all())
+    for r in runtimes:
+        db.delete(r)
+    db.commit()
+    return True
 
 
 def get_running_agents(
     db: Session,
-    auto_restart_only: bool = False,
-) -> list[RunningAgent]:
-    statement = select(RunningAgent).where(RunningAgent.status == "running")
-    if auto_restart_only:
-        statement = statement.where(RunningAgent.auto_restart == True)
+) -> list[Agent]:
+    statement = (
+        select(Agent)
+        .join(Runtime, Runtime.agent_id == Agent.id)
+        .where(Runtime.status == "running")
+        .options(
+            selectinload(Agent.tools),
+            selectinload(Agent.documents),
+            selectinload(Agent.ai_model),
+            selectinload(Agent.runtime_instances),
+        )
+        .distinct()
+    )
     return list(db.scalars(statement).all())
 
 
-def get_running_state(db: Session, agent_id: UUID) -> RunningAgent | None:
-    statement = select(RunningAgent).where(RunningAgent.agent_id == agent_id)
-    return db.scalar(statement)
+def create_runtime_instance(
+    db: Session,
+    agent_id: UUID,
+    status: str = "running",
+    thread_name: str | None = None,
+    configuration: str | None = None,
+) -> Runtime:
+    runtime = Runtime(
+        agent_id=agent_id,
+        status=status,
+        thread_name=thread_name,
+        configuration=configuration,
+        started_at=datetime.utcnow(),
+        last_heartbeat=datetime.utcnow(),
+    )
+    db.add(runtime)
+    db.commit()
+    db.refresh(runtime)
+    return runtime
+
+
+def update_runtime_heartbeat(
+    db: Session,
+    agent_id: UUID,
+) -> None:
+    statement = select(Runtime).where(Runtime.agent_id == agent_id, Runtime.status == "running")
+    runtimes = list(db.scalars(statement).all())
+    for r in runtimes:
+        r.last_heartbeat = datetime.utcnow()
+    db.commit()
+
+
+def stop_runtime_instance(
+    db: Session,
+    agent_id: UUID,
+) -> bool:
+    statement = select(Runtime).where(Runtime.agent_id == agent_id)
+    runtimes = list(db.scalars(statement).all())
+    for r in runtimes:
+        db.delete(r)
+    db.commit()
+    return True
+
+
+def get_active_runtimes(
+    db: Session,
+) -> list[Runtime]:
+    statement = (
+        select(Runtime)
+        .options(selectinload(Runtime.agent))
+        .where(Runtime.status == "running")
+        .order_by(Runtime.started_at.desc())
+    )
+    return list(db.scalars(statement).all())
+
+

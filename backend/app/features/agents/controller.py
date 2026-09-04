@@ -14,7 +14,8 @@ from app.features.agents.schemas import (
     AgentStopResponse,
     AgentUpdate,
 )
-from database.models import Agent, Document, RunningAgent
+from database.models import Agent, Document
+
 
 
 def get_agents_controller(
@@ -59,6 +60,12 @@ def create_agent_controller(
         instructions=agent_in.instructions,
         model_id=ai_model.id,
         model_name=ai_model.name,
+        trigger=agent_in.trigger,
+        schedule=agent_in.schedule,
+        max_execution_time=agent_in.max_execution_time,
+        max_tool_calls=agent_in.max_tool_calls,
+        concurrency=agent_in.concurrency,
+        retries=agent_in.retries,
         tools=tools,
         documents=documents,
     )
@@ -105,6 +112,12 @@ def update_agent_controller(
         instructions=agent_in.instructions,
         model_id=agent_in.model_id,
         model_name=model_name,
+        trigger=agent_in.trigger,
+        schedule=agent_in.schedule,
+        max_execution_time=agent_in.max_execution_time,
+        max_tool_calls=agent_in.max_tool_calls,
+        concurrency=agent_in.concurrency,
+        retries=agent_in.retries,
         tools=tools,
         documents=documents,
     )
@@ -133,13 +146,11 @@ def run_agent_controller(
             detail="Agent not found",
         )
 
-    # Persist running state for auto-restart on system recovery
+    # Mark agent as running
     model.set_agent_running(
         db=db,
         agent_id=agent.id,
-        status="running",
-        auto_restart=run_in.auto_restart,
-        configuration=f'{{"prompt": "{run_in.prompt}"}}',
+        is_running=True,
     )
 
     # Execution stub per instructions
@@ -165,7 +176,7 @@ def stop_agent_controller(
             detail="Agent not found",
         )
 
-    # Remove running state from running_agents table
+    # Mark agent as stopped
     model.set_agent_stopped(db=db, agent_id=agent.id)
 
     exec_id = stop_in.execution_id if stop_in and stop_in.execution_id else uuid4()
@@ -181,9 +192,8 @@ def stop_agent_controller(
 
 def get_running_agents_controller(
     db: Session,
-    auto_restart_only: bool = False,
-) -> list[RunningAgent]:
-    return model.get_running_agents(db=db, auto_restart_only=auto_restart_only)
+) -> list[Agent]:
+    return model.get_running_agents(db=db)
 
 
 def get_agent_documents_controller(db: Session, agent_id: UUID) -> list[Document]:

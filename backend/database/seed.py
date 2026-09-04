@@ -6,7 +6,6 @@ import secrets
 from sqlalchemy import select
 
 from database.database import SessionLocal
-from database.models import associations
 from database.models.agent import Agent
 from database.models.conversation import Conversation
 from database.models.document import Document

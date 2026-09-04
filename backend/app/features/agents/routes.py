@@ -13,7 +13,6 @@ from app.features.agents.schemas import (
     AgentStopResponse,
     AgentUpdate,
     DocumentResponse,
-    RunningAgentResponse,
 )
 from app.features.user.controller import get_current_user
 from database.database import get_db
@@ -50,15 +49,13 @@ def create_agent(
     )
 
 
-@router.get("/running", response_model=list[RunningAgentResponse], status_code=status.HTTP_200_OK)
+@router.get("/running", response_model=list[AgentResponse], status_code=status.HTTP_200_OK)
 def get_running_agents(
-    auto_restart_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     return controller.get_running_agents_controller(
         db=db,
-        auto_restart_only=auto_restart_only,
     )
 
 

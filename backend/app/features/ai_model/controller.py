@@ -1,8 +1,10 @@
 import os
+from pathlib import Path
 import re
+import shutil
 from uuid import UUID
 
-from fastapi import BackgroundTasks, HTTPException, status
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from huggingface_hub import hf_hub_download
 from sqlalchemy.orm import Session
 
@@ -162,3 +164,119 @@ def delete_ai_model_controller(db: Session, model_id: UUID) -> None:
             pass
 
     model.delete_ai_model(db=db, model=ai_model)
+
+
+def upload_ai_model_controller(
+    db: Session,
+    file: UploadFile,
+    name: str | None = None,
+    quantization: str | None = None,
+    repo_id: str = "local-upload",
+) -> AIModel:
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filename cannot be empty",
+        )
+
+    safe_filename = os.path.basename(file.filename)
+    if not safe_filename.lower().endswith(".gguf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .gguf model files are supported for local upload",
+        )
+
+    target_dir = os.path.join(AI_MODELS_DIR, repo_id)
+    os.makedirs(target_dir, exist_ok=True)
+    file_path = os.path.join(target_dir, safe_filename)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to write model file to storage: {str(exc)}",
+        )
+    finally:
+        file.file.close()
+
+    file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
+    base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
+    friendly_name = name.strip() if name and name.strip() else base_name
+    quant = (quantization.strip().upper() if quantization and quantization.strip() else None) or extract_quantization(safe_filename) or "CUSTOM"
+
+    existing_model = model.get_ai_model_by_repo_and_file(
+        db=db,
+        repo_id=repo_id,
+        filename=safe_filename,
+    )
+    if existing_model:
+        return model.update_ai_model_status(
+            db=db,
+            model=existing_model,
+            status="ready",
+            file_path=file_path,
+            size_bytes=file_size,
+            error_message=None,
+        )
+
+    return model.create_ai_model(
+        db=db,
+        name=friendly_name,
+        repo_id=repo_id,
+        filename=safe_filename,
+        file_path=file_path,
+        format="gguf",
+        quantization=quant,
+        size_bytes=file_size,
+        status="ready",
+    )
+
+
+def check_llama_server_and_get_models(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+) -> dict:
+    backend_dir = Path(__file__).resolve().parents[3]
+    primary_server_exe = backend_dir / "llama.cpp" / "bin" / "Release" / "llama-server.exe"
+
+    candidate_paths = [
+        primary_server_exe,
+        backend_dir / "llama.cpp" / "build" / "bin" / "Release" / "llama-server.exe",
+        backend_dir / "llama.cpp" / "build" / "bin" / "llama-server.exe",
+        backend_dir / "llama.cpp" / "bin" / "llama-server.exe",
+    ]
+
+    server_path = None
+    for candidate in candidate_paths:
+        if candidate.is_file():
+            server_path = candidate
+            break
+
+    if not server_path:
+        return {
+            "installed": False,
+            "message": "llama.cpp is not installed",
+            "server_path": None,
+            "models": [],
+        }
+
+    # If binary found in build/bin but primary bin/Release path missing, ensure directory link
+    if not primary_server_exe.is_file() and server_path.is_file():
+        try:
+            primary_server_exe.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(server_path, primary_server_exe)
+            server_path = primary_server_exe
+        except Exception:
+            pass
+
+    models_list = model.get_ai_models(db=db, skip=skip, limit=limit)
+    return {
+        "installed": True,
+        "message": "llama.cpp is installed",
+        "server_path": str(server_path),
+        "models": models_list,
+    }
+

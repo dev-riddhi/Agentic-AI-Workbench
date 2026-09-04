@@ -138,10 +138,21 @@ export default function AgentListPage() {
                     <Bot className="w-5 h-5" />
                   </div>
 
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80">
-                    <Cpu className="w-3 h-3 text-cyan-400" />
-                    <span className="truncate max-w-[130px]">{agent.model || agent.ai_model?.name || 'Local GGUF'}</span>
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {agent.is_running && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Running
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80">
+                      <Cpu className="w-3 h-3 text-cyan-400" />
+                      <span className="truncate max-w-[130px]">{agent.model || agent.ai_model?.name || 'Local GGUF'}</span>
+                    </span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono capitalize bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
+                      {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Agent Title & Description */}

@@ -1,12 +1,20 @@
 from datetime import datetime
+import enum
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
-from . import associations
+from .agent_documents import agent_documents
+from .agent_tools import agent_tools
 from .base import Base
+
+
+class AgentTrigger(str, enum.Enum):
+    MANUAL = "manual"
+    SCHEDULE = "schedule"
+    ONETIME = "onetime"
 
 
 class Agent(Base):
@@ -52,6 +60,50 @@ class Agent(Base):
         nullable=True,
     )
 
+    trigger: Mapped[AgentTrigger] = mapped_column(
+        Enum(
+            AgentTrigger,
+            native_enum=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        default=AgentTrigger.MANUAL,
+        server_default=AgentTrigger.MANUAL.value,
+        nullable=False,
+    )
+
+    schedule: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    max_execution_time: Mapped[int] = mapped_column(
+        Integer,
+        default=10,
+        server_default="10",
+        nullable=False,
+    )
+
+    max_tool_calls: Mapped[int] = mapped_column(
+        Integer,
+        default=50,
+        server_default="50",
+        nullable=False,
+    )
+
+    concurrency: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        server_default="1",
+        nullable=False,
+    )
+
+    retries: Mapped[int] = mapped_column(
+        Integer,
+        default=3,
+        server_default="3",
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.now(),
@@ -69,18 +121,20 @@ class Agent(Base):
     conversations = relationship("Conversation", back_populates="agent")
     tools = relationship(
         "Tool",
-        secondary=associations.agent_tools,
+        secondary=agent_tools,
         back_populates="agents",
     )
     documents = relationship(
         "Document",
-        secondary=associations.agent_documents,
+        secondary=agent_documents,
         back_populates="agents",
     )
-    running_state = relationship(
-        "RunningAgent",
-        back_populates="agent",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
     ai_model = relationship("AIModel")
+
+    @property
+    def is_running(self) -> bool:
+        instances = getattr(self, "runtime_instances", None)
+        if not instances:
+            return False
+        return any(r.status == "running" for r in instances)
+

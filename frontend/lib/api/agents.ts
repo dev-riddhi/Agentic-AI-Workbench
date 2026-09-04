@@ -4,7 +4,6 @@ import {
   AgentCreatePayload,
   AgentUpdatePayload,
   AgentRunResponse,
-  RunningAgentResponse,
   DocumentResponse,
 } from './types';
 
@@ -53,10 +52,8 @@ export const agentsApi = {
     await apiClient.post(`/agents/${id}/stop`, { execution_id });
   },
 
-  getRunningAgents: async (auto_restart_only = false): Promise<RunningAgentResponse[]> => {
-    const response = await apiClient.get<RunningAgentResponse[]>('/agents/running', {
-      params: { auto_restart_only },
-    });
+  getRunningAgents: async (): Promise<Agent[]> => {
+    const response = await apiClient.get<Agent[]>('/agents/running');
     return response.data;
   },
 
