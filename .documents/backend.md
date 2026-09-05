@@ -24,26 +24,26 @@ The backend guarantees that confidential industrial, engineering, and organizati
                               │       (http://.../api/v1)       │
                               └────────────────┬────────────────┘
                                                │
-        ┌───────────────────┬──────────────────┼──────────────────┬──────────────────┐
-        ▼                   ▼                  ▼                  ▼                  ▼
-┌───────────────┐   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│ User & Auth   │   │ Agent Manager │  │ AI Model Hub  │  │ RAG / Vector  │  │  Settings &   │
-│ Controller    │   │ Controller    │  │ Controller    │  │ Knowledge Hub │  │  Governance   │
-└───────┬───────┘   └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘
-        │                   │                  │                  │                  │
-        │           ┌───────┴───────┐          │                  │                  │
-        │           ▼               ▼          ▼                  ▼                  │
-        │    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐     │
-        │    │ AgentRuntime │ │ ModelRuntime │ │ llama.cpp    │ │ pgvector /   │     │
-        │    │ (Scheduler & │ │ (Subprocess  │ │ llama-server │ │ Chroma       │     │
-        │    │  Thread Pool)│ │  Supervisor) │ │ (Native GGUF)│ │ Vector Store │     │
-        │    └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘     │
-        │           │                │                │                │             │
-        ▼           ▼                ▼                ▼                ▼             ▼
-┌────────────────────────────────────────────────────────────────────────────────────┐
-│                    Relational & Metadata Database (PostgreSQL / SQLite)            │
-│  users │ refresh_tokens │ agents │ runtime │ ai_models │ tools │ documents │ ...  │
-└────────────────────────────────────────────────────────────────────────────────────┘
+        ┌───────────────────┬──────────────────┼──────────────────┬──────────────────┬──────────────────┐
+        ▼                   ▼                  ▼                  ▼                  ▼                  ▼
+┌───────────────┐   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│ User & Auth   │   │ Agent Manager │  │ AI Model Hub  │  │ Chat & Model  │  │ RAG / Vector  │  │  Settings &   │
+│ Controller    │   │ Controller    │  │ Controller    │  │ Controller    │  │ Knowledge Hub │  │  Governance   │
+└───────┬───────┘   └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘
+        │                   │                  │                  │                  │                  │
+        │           ┌───────┴───────┐          │                  ▼                  │                  │
+        │           ▼               ▼          ▼           ┌──────────────┐          ▼                  │
+        │    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │ app/tools/   │   ┌──────────────┐          │
+        │    │ AgentRuntime │ │ ModelRuntime │ │ llama.cpp    │ │ (19 Built-in │   │ pgvector /   │          │
+        │    │ (Scheduler & │ │ (Subprocess  │ │ / OpenAI SDK │ │  Tool Engine)│   │ Chroma       │          │
+        │    │  Thread Pool)│ │  Supervisor) │ │ (Native GGUF)│ └──────┬───────┘   │ Vector Store │          │
+        │    └──────┬───────┘ └──────┬───────┘ └──────┬───────┘        │           └──────┬───────┘          │
+        │           │                │                │                │                  │                  │
+        ▼           ▼                ▼                ▼                ▼                  ▼                  ▼
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                          Relational & Metadata Database (PostgreSQL / SQLite)                          │
+│ users │ refresh_tokens │ agents │ runtime │ ai_models │ agent_tools │ conversations │ messages │ tools │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -636,6 +636,102 @@ Stores application-wide system configurations, limits, and customizable JSON key
 
 ---
 
+### 3.1.7 Chat & Direct Model Reasoning Routes (`/api/v1/chat`)
+
+Provides direct interactive chat, conversation session persistence, streaming inference, and autonomous tool calling directly with local GGUF models.
+
+#### 1. List Conversations
+* **Method**: `GET`
+* **Path**: `/api/v1/chat/`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Query Params**: `model_id` (optional UUID to filter conversations by model)
+* **Response `200 OK`**:
+```json
+[
+  {
+    "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    "model_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "model_name": "Qwen2.5-7B-Instruct-Q4_K_M",
+    "title": "Async IO Optimization",
+    "message_count": 4,
+    "last_message": "Here is an example using asyncio.Semaphore...",
+    "created_at": "2026-09-05T12:00:00Z",
+    "updated_at": "2026-09-05T12:05:00Z"
+  }
+]
+```
+
+#### 2. Create Conversation
+* **Method**: `POST`
+* **Path**: `/api/v1/chat/`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Request Body**:
+```json
+{
+  "model_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "title": "System Architecture Review",
+  "initial_message": "Can you analyze edge LLM performance?",
+  "system_prompt": "You are a senior systems engineer specializing in on-premise AI."
+}
+```
+* **Response `201 Created`**: Returns the full `ConversationResponse` object with initial messages.
+
+#### 3. Get Conversation Details
+* **Method**: `GET`
+* **Path**: `/api/v1/chat/{conversation_id}`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Response `200 OK`**: Returns complete `ConversationResponse` with full message history and tool executions.
+
+#### 4. Delete Conversation
+* **Method**: `DELETE`
+* **Path**: `/api/v1/chat/{conversation_id}`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Response `200 OK`**:
+```json
+{
+  "status": "success",
+  "message": "Conversation deleted successfully"
+}
+```
+
+#### 5. Send Chat Message (Standard Request / Response)
+* **Method**: `POST`
+* **Path**: `/api/v1/chat/{conversation_id}/messages`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Request Body**:
+```json
+{
+  "message": "Calculate the factorial of 15 using Python.",
+  "system_prompt": "You are a precise coding assistant with code execution tools.",
+  "temperature": 0.7,
+  "max_tokens": 1024
+}
+```
+* **Behavior**:
+  1. Ensures the target model server is running (auto-starts if needed).
+  2. Submits user message to the local model via OpenAI client.
+  3. If model emits tool calls (e.g. `python_execution`), executes the tool and passes results back to the model.
+  4. Persists the conversation turn and returns the updated `ConversationResponse`.
+
+#### 6. Stream Chat Message (Server-Sent Events)
+* **Method**: `POST`
+* **Path**: `/api/v1/chat/{conversation_id}/stream`
+* **Auth Required**: Yes (`Bearer <token>`)
+* **Content-Type**: `text/event-stream`
+* **Stream Events**:
+```text
+data: {"token": "Here"}
+
+data: {"token": " is"}
+
+data: {"token": " the"}
+
+data: {"token": " result"}
+```
+* Automatically records assistant response into the conversation history upon completion.
+
+---
+
 # 4. Agent & Model Runtime Architecture
 
 The workbench uses a dual-engine architecture separating model serving from agent orchestration:
@@ -688,29 +784,87 @@ The workbench uses a dual-engine architecture separating model serving from agen
 
 # 5. Local / Open-Weight Model Layer
 
-The platform is strictly optimized for **GGUF (GPT-Generated Unified Format)** models executed through native `llama.cpp`.
+The platform is strictly optimized for **GGUF (GPT-Generated Unified Format)** models executed through native `llama.cpp` and communicated with via standard OpenAI-compatible client protocols.
 
-### Build & Compilation Automation
-The script `backend/build_llama.ps1` automates compiling `llama.cpp` natively for Windows:
+### 5.1 Local LLM Integration Module (`backend/app/llm/llama.cpp.py`)
+
+A modular Python interface wrapping `llama-server.exe` through the OpenAI Python SDK:
+* **Client Factory (`get_client()`)**: Initializes an `OpenAI` client directed at the local server (`http://127.0.0.1:8080/v1`) with configurable request timeouts and retry logic.
+* **Model Discovery (`get_running_models()`)**: Queries the `/v1/models` endpoint of `llama-server.exe` to inspect models currently loaded into VRAM/RAM.
+* **Chat Completion & Tool Calling**: Formats system, user, and tool messages with standard JSON-schema tool specifications.
+* **Token Streaming (`stream_chat_completion()`)**: Yields chunks real-time using delta token extraction with support for deep reasoning content (`reasoning_content`).
+
+### 5.2 Build & Compilation Automation (`build_llama.ps1`)
+
+The workbench includes an automated PowerShell build utility `backend/build_llama.ps1` to compile `llama.cpp` natively on Windows with hardware acceleration and zero external dependencies:
+
+#### System & Toolchain Prerequisites:
+* **Git**: `winget install --id Git.Git -e`
+* **CMake (v3.20+)**: `winget install --id Kitware.CMake -e`
+* **Visual Studio 2022 C++ Build Tools**:
+  ```powershell
+  winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--passive --config --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+  ```
+* **Hardware Compute SDKs (Auto-Detected)**:
+  * **NVIDIA (CUDA)**: `winget install --id Nvidia.CUDA -e` (enables `-DGGML_CUDA=ON`)
+  * **Intel / AMD (Vulkan)**: `winget install --id KhronosGroup.VulkanSDK -e` (enables `-DGGML_VULKAN=ON`)
+  * **CPU Fallback**: Enables `-DGGML_AVX2=ON` for optimized native CPU vector instructions.
+
+#### Execution Syntax:
 ```powershell
-powershell -ExecutionPolicy Bypass -File backend/build_llama.ps1
+# From the backend directory:
+powershell -ExecutionPolicy Bypass -File build_llama.ps1
 ```
-It supports:
-* CPU with AVX / AVX2 / AVX512 vectorization.
-* GPU offloading via CUDA (NVIDIA) or Vulkan.
-* Binary artifacts output to `backend/llama.cpp/bin/Release/llama-server.exe`.
+
+#### Supported Parameters:
+| Flag | Type | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `-DeviceBackend` | `string` | Compute target: `auto`, `cuda`, `vulkan`, or `cpu` | `auto` |
+| `-ForceRebuild` | `switch` | Wipes existing `build/` directory and recompiles from scratch | `false` |
+| `-SkipPrereqs` | `switch` | Skips auto-discovery and winget package installations | `false` |
+| `-CustomCmakeFlags`| `string` | Appends custom CMake definitions (e.g. `"-DGGML_AVX512=ON"`) | `""` |
+
+#### Compilation Pipeline & Storage Optimization:
+1. **Sync & Checkout**: Clones or fast-forwards `https://github.com/ggerganov/llama.cpp.git` into `backend/llama.cpp`.
+2. **GPU & Compiler Discovery**: Inspects `vswhere.exe`, `nvcc`, and `VULKAN_SDK` environment variables and hardware video controllers.
+3. **Multi-Threaded Build**: Runs `cmake --build build --config Release -j` to emit optimized `llama-server.exe` and CLI tools.
+4. **Source Code Pruning**: Deletes all intermediate source trees and git history within `llama.cpp/`, retaining **strictly the compiled `build/` directory** to preserve disk space.
+5. **Junction Link**: Automatically creates directory junction `llama.cpp/bin` -> `llama.cpp/build/bin` for direct executable access.
 
 ---
 
-# 6. Tool System
+# 6. Autonomous Tool System (`backend/app/tools/`)
 
-Agents dynamically call registered deterministic tools:
-1. **Database**: Executes safe SQL statements against designated enterprise operational tables.
-2. **Documents**: Performs vector similarity search over embedded company knowledge files.
-3. **Email**: Formats and dispatches notification drafts to designated operational recipients.
-4. **File Reader**: Reads raw files from restricted workspace storage.
+The workbench features an extensible, fully autonomous tool execution engine. Tools follow the standard OpenAI function calling schema and are registered in `backend/app/tools/__init__.py`.
 
-Tools are permission-controlled via the `agent_tools` association table. Agents can only call tools explicitly assigned during agent configuration.
+### 6.1 Available Built-In Tools (19 Tools)
+
+| Tool Name | Module | Description | Parameters |
+| :--- | :--- | :--- | :--- |
+| `read_file` | `read_file.py` | Reads text from local files with line range & byte slicing | `file_path`, `start_line`, `end_line`, `max_bytes`, `encoding` |
+| `write_create_file` | `write_create_file.py` | Creates or overwrites files with automatic directory creation | `file_path`, `content`, `mode`, `encoding` |
+| `edit_file` | `edit_file.py` | Performs targeted search-and-replace text modifications | `file_path`, `target_string`, `replacement_string`, `occurrence` |
+| `delete_rename_file` | `delete_rename_file.py` | Safely renames or removes files/directories | `action` (`rename`/`delete`), `file_path`, `new_path` |
+| `list_directory` | `list_directory.py` | Lists directory files with sizes and recursive traversal | `dir_path`, `recursive`, `max_depth` |
+| `search_files` | `search_files.py` | Regex and literal pattern searching across directory files | `pattern`, `search_path`, `recursive`, `file_extension` |
+| `get_file_metadata` | `get_file_metadata.py` | Retrieves file size, timestamps, permissions, and MIME type | `file_path` |
+| `parse_pdf` | `parse_pdf.py` | Extracts structured text from multi-page PDF documents | `file_path`, `max_pages`, `start_page` |
+| `read_write_csv_excel_json_xml` | `read_write_csv_excel_json_xml.py` | Multi-format data loader & writer (CSV, XLSX, JSON, XML) | `action`, `file_path`, `format`, `data`, `sheet_name`, `limit` |
+| `compress_extract_zip` | `compress_extract_zip.py` | Compresses folders or extracts archives (`.zip`, `.tar.gz`) | `action` (`compress`/`extract`), `source_path`, `destination_path` |
+| `web_search` | `web_search.py` | Performs air-gapped or intranet web queries with summaries | `query`, `max_results` |
+| `fetch_webpage` | `fetch_webpage.py` | Downloads raw HTML or text content from allowed HTTP endpoints | `url`, `headers`, `timeout` |
+| `extract_webpage_content` | `extract_webpage_content.py` | Strips scripts/styling and extracts clean markdown/text | `url`, `css_selector`, `include_links` |
+| `browse_links` | `browse_links.py` | Discovers and filters hyperlinks within web pages | `url`, `filter_domain`, `max_links` |
+| `search_news` | `search_news.py` | Searches local or external news feeds with timestamps | `query`, `time_range`, `max_results` |
+| `search_images` | `search_images.py` | Discovers image URLs and captions matching queries | `query`, `max_results` |
+| `download_files` | `download_files.py` | Downloads remote assets to local storage with progress check | `url`, `destination_path` |
+| `query_apis` | `query_apis.py` | Issues parameterized REST HTTP requests (GET, POST, PUT, DELETE) | `url`, `method`, `headers`, `params`, `json_body` |
+| `python_execution` | `python_execution.py` | In-process Python sandbox capturing `stdout`, `stderr`, and return values | `code`, `timeout_seconds` |
+
+### 6.2 Tool Execution Architecture
+* **`ToolFunctionDict`**: Wraps OpenAI-compatible function dictionary definitions with a direct `__call__` interface, allowing unified serialization and programmatic invocation.
+* **`execute_tool(name, arguments)`**: Dynamically validates and executes the target tool handler with provided JSON arguments, capturing execution duration in milliseconds.
+* **Tool Test Harness (`backend/test_all_tools.py`)**: A comprehensive test suite that verifies all 19 tools execute deterministically and return compliant payloads.
 
 ---
 
@@ -733,15 +887,12 @@ Managed via SQLAlchemy and Alembic migrations:
 | `refresh_tokens` | Single-use rotating refresh tokens | `id`, `user_id`, `token`, `expires_at`, `revoked` |
 | `agents` | AI agent configurations | `id`, `owner_id`, `name`, `instructions`, `model_id`, `trigger`, `schedule`, `max_execution_time`, `max_tool_calls`, `concurrency`, `retries` |
 | `runtime` | Currently executing agent threads | `id`, `agent_id`, `status`, `thread_name`, `started_at`, `last_heartbeat`, `configuration` |
-| `ai_models` | Downloaded / uploaded GGUF models | `id`, `name`, `repo_id`, `filename`, `file_path`, `format`, `quantization`, `size_bytes`, `status` |
-| `tools` | Registered system capabilities | `id`, `name`, `description`, `handler` |
-| `agent_tools` | Agent-to-tool permissions mapping | `agent_id`, `tool_id` |
+| `ai_models` | Downloaded / uploaded GGUF models | `id`, `name`, `repo_id`, `filename`, `file_path`, `format`, `architecture`, `context_length`, `quantization`, `size_bytes`, `status` |
+| `agent_tools` | Agent-to-tool permissions mapping | `id`, `agent_id`, `tool_name` |
 | `documents` | Uploaded knowledge files | `id`, `name`, `file_path`, `mime_type`, `size_bytes`, `status` |
 | `agent_documents` | Agent-to-document bindings | `agent_id`, `document_id` |
 | `settings` | System-wide config and JSONB values | `id`, `key`, `data` (JSON/JSONB), `created_at`, `updated_at` |
-| `conversations` | Chat and execution sessions | `id`, `agent_id`, `user_id`, `title`, `created_at` |
-| `messages` | Execution dialog messages | `id`, `conversation_id`, `role`, `content`, `created_at` |
-| `executions` | Completed execution logs | `id`, `agent_id`, `status`, `response`, `tool_calls`, `completed_at` |
+| `conversations` | Interactive model chat sessions | `id`, `user_id`, `model_id`, `agent_id`, `title`, `messages` (JSON), `created_at`, `updated_at` |
 
 ---
 

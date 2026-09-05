@@ -32,20 +32,20 @@ The frontend is built with **Next.js 15+ (App Router)**, **React 19**, **TypeScr
        (`app/auth/login/page.tsx`)                                   │ Sidebar + Header Shell │
                                                                      └───────────┬────────────┘
                                                                                  │
-        ┌───────────────────┬───────────────────┬───────────────────┬────────────┴───────┬───────────────────┐
-        ▼                   ▼                   ▼                   ▼                    ▼                   ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐   ┌───────────────┐
-│    Agents     │   │ Agent Builder │   │ Agent Console │   │   Knowledge   │    │   Model Hub   │   │    Runtime    │
-│   Workspace   │   │  & Scheduler  │   │  (Run / Chat) │   │     Vault     │    │  (GGUF Store) │   │    Status     │
-│ (`/agents`)   │   │(`/agents/new`)│   │(`/agents/[id]`)   │ (`/documents`)│    │ (`/models`)   │   │ (`/runtime`)  │
-└───────────────┘   └───────────────┘   └───────────────┘   └───────────────┘    └───────────────┘   └───────────────┘
-                                                                                                           │
-                                                                                                           ▼
-                                                                                                 ┌───────────────────┐
-                                                                                                 │    Settings &     │
-                                                                                                 │    Governance     │
-                                                                                                 │   (`/settings`)   │
-                                                                                                 └───────────────────┘
+        ┌───────────────────┬───────────────────┬───────────────────┬────────────┴───────┬───────────────────┬───────────────────┐
+        ▼                   ▼                   ▼                   ▼                    ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐   ┌───────────────┐   ┌───────────────┐
+│    Agents     │   │ Agent Builder │   │ Agent Console │   │   Knowledge   │    │   Model Hub   │   │  Model Chat   │   │    Runtime    │
+│   Workspace   │   │  & Scheduler  │   │ (Run / State) │   │     Vault     │    │ (GGUF Models) │   │ (Direct LLM)  │   │    Status     │
+│ (`/agents`)   │   │(`/agents/new`)│   │(`/agents/[id]`)   │ (`/documents`)│    │ (`/models`)   │   │  (`/chat`)    │   │ (`/runtime`)  │
+└───────────────┘   └───────────────┘   └───────────────┘   └───────────────┘    └───────────────┘   └───────────────┘   └───────────────┘
+                                                                                                                           │
+                                                                                                                           ▼
+                                                                                                                 ┌───────────────────┐
+                                                                                                                 │    Settings &     │
+                                                                                                                 │    Governance     │
+                                                                                                                 │   (`/settings`)   │
+                                                                                                                 └───────────────────┘
 ```
 
 ### 2.1 Key Design Elements
@@ -169,7 +169,36 @@ Control center for downloading, uploading, and managing open-weight local `.gguf
 
 ---
 
-### 3.6 Runtime Status & Diagnostics (`/app/runtime/page.tsx`)
+### 3.6 Model Chat Workspace (`/app/chat/page.tsx`)
+
+A dedicated interactive chat console providing direct conversation, prompt engineering, and autonomous tool calling with local GGUF models without requiring full agent provisioning:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│ Model Chat                                                             │
+│ [ Conversations Sidebar ] [ Model Selector ] [ Real-Time Chat Stream ] │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Conversations Sidebar**:
+  * Lists previous chat sessions grouped by timestamp with message counters and model badges.
+  * Search conversations by title or last message.
+  * **[+ New Chat]**: Opens an instant dialog to select a target local GGUF model and custom system instruction.
+  * Delete session with confirmation modal.
+* **Direct Model Reasoning & Streaming**:
+  * Supports real-time token-by-token streaming via Server-Sent Events (SSE) from `POST /api/v1/chat/{id}/stream`.
+  * Preserves full conversation context across multi-turn interactions.
+* **Autonomous Tool Execution Cards**:
+  * Renders visual step-by-step cards when models invoke local tools (e.g. `python_execution`, `read_file`, `web_search`).
+  * Displays tool name, parsed arguments JSON, execution latency in milliseconds, and structured return output.
+* **Quick Starters**:
+  * One-click prompt templates for instant model verification (`Code Assistant`, `System Architecture`, `Reasoning & Logic`, `Data Diagnostic`).
+* **Runtime Awareness**:
+  * Real-time status indicator showing whether the model server is currently running or starting.
+
+---
+
+### 3.7 Runtime Status & Diagnostics (`/app/runtime/page.tsx`)
 
 Unified status and health supervision center dedicated exclusively to status checking of the **Agent Runtime** and **Model Runtime**:
 
@@ -209,7 +238,7 @@ Unified status and health supervision center dedicated exclusively to status che
 
 ---
 
-### 3.7 Settings & Governance (`/app/settings/page.tsx`)
+### 3.8 Settings & Governance (`/app/settings/page.tsx`)
 
 System administration and enterprise configuration:
 
@@ -250,6 +279,7 @@ The frontend interacts with the backend through modular, strongly typed API modu
 | `modelsApi` | `lib/api/models.ts` | `getModels`, `getModel`, `downloadModel`, `uploadModel`, `deleteModel`, `checkLlamaStatus`, `startRuntime`, `stopRuntime`, `getRuntimeStatus`, `getRuntimeLogs` | GGUF model management, HF download, file upload, and llama.cpp runtime |
 | `documentsApi` | `lib/api/documents.ts` | `getDocuments`, `getDocument`, `uploadDocument`, `downloadDocument`, `deleteDocument` | Knowledge Vault document ingestion, retrieval, and binary downloads |
 | `runtimeApi` | `lib/api/runtime.ts` | `getOverview`, `getModelStatus`, `startModel`, `stopModel`, `getModelLogs`, `testModel`, `getActiveAgents`, `startAgent`, `stopAgent` | Real-time operations overview, model server testing, and worker management |
+| `chatApi` | `lib/api/chat.ts` | `listConversations`, `createConversation`, `getConversation`, `deleteConversation`, `sendMessage`, `streamMessage` | Multi-turn model chat sessions, SSE token streaming, and autonomous tool execution |
 | `settingsApi` | `lib/api/settings.ts` | `getSettings`, `updateSettings` | Global system settings, company parameters, and custom JSON key-values |
 | `usersApi` | `lib/api/users.ts` | `getUsers`, `getUser`, `createUser`, `updateUser`, `deleteUser` | User directory and administrative operator provisioning |
 | `authApi` | `lib/api/auth.ts` | `login`, `refresh`, `logout`, `getCurrentUser` | Authentication and session token handling |
@@ -329,6 +359,49 @@ export interface SettingsData {
   maintenance_mode: boolean;
   extra_values?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp?: string | null;
+  tool_calls?: Array<{
+    id: string;
+    type: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }> | null;
+  tool_results?: Array<{
+    tool_name: string;
+    result: unknown;
+    status: 'success' | 'error';
+    execution_time_ms?: number;
+  }> | null;
+}
+
+export interface ConversationResponse {
+  id: string;
+  user_id: string;
+  model_id?: string | null;
+  model_name?: string | null;
+  agent_id?: string | null;
+  title?: string | null;
+  messages: ChatMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  model_id?: string | null;
+  model_name?: string | null;
+  title?: string | null;
+  message_count: number;
+  last_message?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 ```
 
