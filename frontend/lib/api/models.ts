@@ -40,10 +40,19 @@ export const modelsApi = {
 
   uploadModel: async (
     file: File,
-    name?: string,
+    nameOrProgress?: string | ((progressEvent: { loaded: number; total?: number }) => void),
     quantization?: string,
     onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
   ): Promise<AIModelResponse> => {
+    let name: string | undefined;
+    let progressCallback = onUploadProgress;
+
+    if (typeof nameOrProgress === 'function') {
+      progressCallback = nameOrProgress;
+    } else {
+      name = nameOrProgress;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);
@@ -53,7 +62,7 @@ export const modelsApi = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      onUploadProgress,
+      onUploadProgress: progressCallback,
       timeout: 0,
     });
     return response.data;

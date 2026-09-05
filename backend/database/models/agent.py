@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
 from .agent_documents import agent_documents
-from .agent_tools import agent_tools
+from .agent_tools import AgentTool
 from .base import Base
 
 
@@ -119,10 +119,11 @@ class Agent(Base):
 
     owner = relationship("User", back_populates="agents")
     conversations = relationship("Conversation", back_populates="agent")
-    tools = relationship(
-        "Tool",
-        secondary=agent_tools,
-        back_populates="agents",
+    agent_tools = relationship(
+        "AgentTool",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
     documents = relationship(
         "Document",
@@ -130,6 +131,17 @@ class Agent(Base):
         back_populates="agents",
     )
     ai_model = relationship("AIModel")
+
+    @property
+    def tools(self) -> list[str]:
+        return [at.tool_name for at in (self.agent_tools or [])]
+
+    @tools.setter
+    def tools(self, tool_names: list) -> None:
+        self.agent_tools = [
+            at if isinstance(at, AgentTool) else AgentTool(tool_name=str(getattr(at, "name", at)))
+            for at in (tool_names or [])
+        ]
 
     @property
     def is_running(self) -> bool:

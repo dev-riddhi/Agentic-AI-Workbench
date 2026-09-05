@@ -4,5 +4,6 @@ __pycache__/
 .venv/
 uploads/
 /models/
-*.db
+/database/*.db
 llama.cpp/
+/alembic/versions/*

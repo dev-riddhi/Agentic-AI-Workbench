@@ -1,16 +1,16 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.features.ai_model.schemas import AIModelResponse
 
 
 class ToolResponse(BaseModel):
-    id: UUID
+    id: str | UUID | None = None
     name: str
     description: str | None = None
-    handler: str
+    handler: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -101,6 +101,49 @@ class AgentResponse(BaseModel):
     documents: list[DocumentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("tools", mode="before")
+    @classmethod
+    def serialize_tools(cls, v: any) -> list[dict[str, any]]:
+        if not v:
+            return []
+        try:
+            from app.tools import TOOL_DESCRIPTIONS
+        except ImportError:
+            TOOL_DESCRIPTIONS = {}
+
+        res = []
+        for item in v:
+            if isinstance(item, str):
+                res.append({
+                    "id": item,
+                    "name": item,
+                    "description": TOOL_DESCRIPTIONS.get(item),
+                    "handler": item,
+                })
+            elif hasattr(item, "tool_name"):
+                name = item.tool_name
+                res.append({
+                    "id": name,
+                    "name": name,
+                    "description": TOOL_DESCRIPTIONS.get(name),
+                    "handler": name,
+                })
+            elif hasattr(item, "name"):
+                name = item.name
+                res.append({
+                    "id": str(getattr(item, "id", name)),
+                    "name": name,
+                    "description": getattr(item, "description", None) or TOOL_DESCRIPTIONS.get(name),
+                    "handler": getattr(item, "handler", name),
+                })
+            elif isinstance(item, dict):
+                d = dict(item)
+                name = d.get("name") or d.get("id")
+                if name and not d.get("description"):
+                    d["description"] = TOOL_DESCRIPTIONS.get(name)
+                res.append(d)
+        return res
 
 
 class AgentRunRequest(BaseModel):

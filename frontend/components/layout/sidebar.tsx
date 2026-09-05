@@ -14,6 +14,7 @@ import {
   User,
   ChevronRight,
   ExternalLink,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useState } from 'react';
@@ -38,10 +39,16 @@ const NAV_ITEMS = [
     description: 'GGUF & Local Quantizations',
   },
   {
-    name: 'Running Operations',
-    href: '/operations',
+    name: 'Model Chat',
+    href: '/chat',
+    icon: MessageSquare,
+    description: 'Direct Model Reasoning',
+  },
+  {
+    name: 'Runtime',
+    href: '/runtime',
     icon: Activity,
-    description: 'Active Supervisor & Workers',
+    description: 'Agent & Model Status',
   },
   {
     name: 'Settings',

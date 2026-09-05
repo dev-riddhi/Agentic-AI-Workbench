@@ -2,75 +2,68 @@
 
 ## 1. Main Goal
 
-The backend is the core of the platform.
+The backend is the core engine of the platform.
 
 Its primary goal is to:
 
-> **Create, configure, execute, and manage AI agents that use open-weight models locally while allowing agents to securely access company data and tools.**
+> **Create, configure, execute, monitor, and manage autonomous AI agents powered by local, open-weight GGUF models running air-gapped on-premise, while providing secure, deterministic access to enterprise data, tools, and scheduled automations.**
 
-The backend should ensure that confidential industrial data can remain inside the company's infrastructure.
+The backend guarantees that confidential industrial, engineering, and organizational data never leaves the organization's private infrastructure (0.0 KB egress).
 
 ---
 
 ## 2. Backend Architecture
 
 ```text
-                         FRONTEND
-                            │
-                            ▼
-                    ┌───────────────┐
-                    │    FastAPI    │
-                    │   REST API    │
-                    └───────┬───────┘
-                            │
-                ┌───────────┼───────────┐
-                ▼           ▼           ▼
-         Agent Manager  Agent Runtime  Document
-                                      Manager
-                │           │           │
-                │           │           ▼
-                │           │      RAG Pipeline
-                │           │           │
-                │           │      Vector DB
-                │           │
-                │     ┌─────┴─────┐
-                │     │           │
-                ▼     ▼           ▼
-             Database Tools   Local LLM
-                       │           │
-                       ▼           ▼
-                  Internal     Ollama /
-                  Systems      vLLM / llama.cpp
+                                FRONTEND (Next.js 15+ / React)
+                                               │
+                                               │ HTTP / REST (JWT Bearer)
+                                               ▼
+                              ┌─────────────────────────────────┐
+                              │       FastAPI API Gateway       │
+                              │       (http://.../api/v1)       │
+                              └────────────────┬────────────────┘
+                                               │
+        ┌───────────────────┬──────────────────┼──────────────────┬──────────────────┐
+        ▼                   ▼                  ▼                  ▼                  ▼
+┌───────────────┐   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│ User & Auth   │   │ Agent Manager │  │ AI Model Hub  │  │ RAG / Vector  │  │  Settings &   │
+│ Controller    │   │ Controller    │  │ Controller    │  │ Knowledge Hub │  │  Governance   │
+└───────┬───────┘   └───────┬───────┘  └───────┬───────┘  └───────┬───────┘  └───────┬───────┘
+        │                   │                  │                  │                  │
+        │           ┌───────┴───────┐          │                  │                  │
+        │           ▼               ▼          ▼                  ▼                  │
+        │    ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐     │
+        │    │ AgentRuntime │ │ ModelRuntime │ │ llama.cpp    │ │ pgvector /   │     │
+        │    │ (Scheduler & │ │ (Subprocess  │ │ llama-server │ │ Chroma       │     │
+        │    │  Thread Pool)│ │  Supervisor) │ │ (Native GGUF)│ │ Vector Store │     │
+        │    └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘     │
+        │           │                │                │                │             │
+        ▼           ▼                ▼                ▼                ▼             ▼
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│                    Relational & Metadata Database (PostgreSQL / SQLite)            │
+│  users │ refresh_tokens │ agents │ runtime │ ai_models │ tools │ documents │ ...  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-# 3. Main Backend Components
+# 3. Main Backend Components & API Reference
 
 ## 3.1 API Layer
 
-Use **FastAPI** as the main backend API.
+Built on **FastAPI** (`backend/app/router.py`), organized into feature modules with Pydantic validation schemas, dependency injection for database sessions (`SessionLocal`), and JWT bearer token authentication.
 
-Responsibilities:
-
-* Receive frontend requests
-* Validate requests
-* Authenticate users
-* Manage agents
-* Manage documents
-* Start agent executions
-* Return results
-
-### Authentication & Security
-
+### Authentication & Security Policy
 * **Base URL**: `http://localhost:8000/api/v1`
 * **Scheme**: HTTP Bearer JWT (`Authorization: Bearer <access_token>`)
-* **Token Lifespan**: Access Token (30 mins), Refresh Token (7 days)
-* **Refresh Token Rotation**: Refresh tokens are single-use and rotated on every refresh call.
+* **Access Token Lifespan**: 30 minutes
+* **Refresh Token Lifespan**: 7 days (stored in database with rotation on use)
+* **Air-Gapped Policy**: Strict local binding, zero remote telemetry.
 
 ---
 
-### 3.1.1 Authentication & User Management Routes
+### 3.1.1 Authentication & User Management Routes (`/api/v1/users`)
 
 #### 1. User Login
 * **Method**: `POST`
@@ -99,8 +92,6 @@ Responsibilities:
 }
 ```
 
----
-
 #### 2. Refresh Access Token
 * **Method**: `POST`
 * **Path**: `/api/v1/users/refresh`
@@ -120,14 +111,6 @@ Responsibilities:
   "expires_in": 1800
 }
 ```
-* **Error `401 Unauthorized`**:
-```json
-{
-  "detail": "Invalid, expired, or revoked refresh token"
-}
-```
-
----
 
 #### 3. User Logout
 * **Method**: `POST`
@@ -141,13 +124,10 @@ Responsibilities:
 ```
 * **Response `204 No Content`**
 
----
-
 #### 4. Get Current User Profile
 * **Method**: `GET`
 * **Path**: `/api/v1/users/me`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Headers**: `Authorization: Bearer <access_token>`
 * **Response `200 OK`**:
 ```json
 {
@@ -157,16 +137,15 @@ Responsibilities:
   "created_at": "2026-09-03T14:20:00Z"
 }
 ```
-* **Error `401 Unauthorized`**:
-```json
-{
-  "detail": "Could not validate credentials"
-}
-```
 
----
+#### 5. List Users
+* **Method**: `GET`
+* **Path**: `/api/v1/users/`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Query Parameters**: `skip` (int, default: 0), `limit` (int, default: 100)
+* **Response `200 OK`**: Array of `User` objects.
 
-#### 5. Create User
+#### 6. Create User
 * **Method**: `POST`
 * **Path**: `/api/v1/users/`
 * **Auth Required**: No (or Admin)
@@ -178,152 +157,88 @@ Responsibilities:
   "password": "securepassword123"
 }
 ```
-* **Response `201 Created`**:
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "created_at": "2026-09-03T14:20:00Z"
-}
-```
-* **Error `400 Bad Request`**:
-```json
-{
-  "detail": "Email already registered"
-}
-```
+* **Response `201 Created`**: Single user object.
 
----
-
-#### 6. List Users
-* **Method**: `GET`
-* **Path**: `/api/v1/users/`
-* **Query Parameters**:
-  * `skip` (integer, default: 0)
-  * `limit` (integer, default: 100)
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "name": "Jane Doe",
-    "email": "jane@example.com",
-    "created_at": "2026-09-03T14:20:00Z"
-  }
-]
-```
-
----
-
-#### 7. Get User by ID
-* **Method**: `GET`
-* **Path**: `/api/v1/users/{user_id}`
-* **Path Parameters**: `user_id` (UUID)
-* **Response `200 OK`**:
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "created_at": "2026-09-03T14:20:00Z"
-}
-```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "User not found"
-}
-```
-
----
-
-#### 8. Update User
+#### 7. Update User
 * **Method**: `PUT` or `PATCH`
 * **Path**: `/api/v1/users/{user_id}`
-* **Path Parameters**: `user_id` (UUID)
-* **Request Body**:
-```json
-{
-  "name": "Jane Updated",
-  "email": "jane.updated@example.com",
-  "password": "newpassword123"
-}
-```
-*(All fields are optional)*
-* **Response `200 OK`**:
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Jane Updated",
-  "email": "jane.updated@example.com",
-  "created_at": "2026-09-03T14:20:00Z"
-}
-```
-* **Error `400 Bad Request`**:
-```json
-{
-  "detail": "Email already registered"
-}
-```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "User not found"
-}
-```
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Request Body**: Optional `name`, `email`, `password`.
 
----
-
-#### 9. Delete User
+#### 8. Delete User
 * **Method**: `DELETE`
 * **Path**: `/api/v1/users/{user_id}`
-* **Path Parameters**: `user_id` (UUID)
+* **Auth Required**: Yes (`Bearer <access_token>`)
 * **Response `204 No Content`**
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "User not found"
-}
-```
 
 ---
 
-### 3.1.2 Agent Management Routes
+### 3.1.2 Agent Management Routes (`/api/v1/agents`)
+
+The agent engine supports autonomous triggers, scheduling expressions, tool registries, document knowledge bindings, and concurrency limits.
 
 #### 1. List Agents
 * **Method**: `GET`
 * **Path**: `/api/v1/agents/`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Query Parameters**:
-  * `skip` (integer, default: 0)
-  * `limit` (integer, default: 100)
+* **Query Parameters**: `skip` (default: 0), `limit` (default: 100)
 * **Response `200 OK`**:
 ```json
 [
   {
     "id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
     "owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "name": "Maintenance Agent",
-    "description": "Industrial maintenance assistant",
-    "instructions": "Help analyze machine maintenance problems.",
-    "model": "qwen",
+    "name": "Daily Sales Analyst",
+    "description": "Analyzes ERP sales data and drafts daily summaries",
+    "instructions": "Analyze the latest sales data and generate a summary report.",
+    "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
+    "model": "TinyLlama 1.1B Chat (Q4_K_M)",
+    "ai_model": {
+      "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
+      "name": "TinyLlama 1.1B Chat (Q4_K_M)",
+      "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+      "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+      "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+      "format": "gguf",
+      "quantization": "Q4_K_M",
+      "size_bytes": 669229056,
+      "status": "ready"
+    },
+    "trigger": "schedule",
+    "schedule": "every 1 day at 09:00",
+    "max_execution_time": 10,
+    "max_tool_calls": 50,
+    "concurrency": 1,
+    "retries": 3,
+    "is_running": false,
     "created_at": "2026-09-03T14:30:00Z",
     "updated_at": "2026-09-03T14:30:00Z",
     "tools": [
       {
         "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2aa",
-        "name": "document_search",
-        "description": "Searches embedded company documents",
+        "name": "Database",
+        "description": "Query relational tables and execute structured analytics",
+        "handler": "default_database_query"
+      },
+      {
+        "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2bb",
+        "name": "Documents",
+        "description": "Perform semantic vector retrieval across uploaded knowledge",
         "handler": "default_document_search"
       }
     ],
-    "documents": []
+    "documents": [
+      {
+        "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
+        "name": "Q3_Sales_Report.pdf",
+        "file_path": "uploads/Q3_Sales_Report.pdf",
+        "mime_type": "application/pdf",
+        "created_at": "2026-09-03T14:25:00Z"
+      }
+    ]
   }
 ]
 ```
-
----
 
 #### 2. Create Agent
 * **Method**: `POST`
@@ -332,131 +247,52 @@ Responsibilities:
 * **Request Body**:
 ```json
 {
-  "name": "Maintenance Agent",
-  "description": "Industrial maintenance assistant",
-  "instructions": "Help analyze machine maintenance problems.",
+  "name": "Daily Sales Analyst",
+  "description": "Analyzes ERP sales data and drafts daily summaries",
+  "instructions": "Analyze the latest sales data and generate a summary report.",
   "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "tools": ["document_search", "file_reader"],
+  "trigger": "schedule",
+  "schedule": "every 1 day at 09:00",
+  "max_execution_time": 10,
+  "max_tool_calls": 50,
+  "concurrency": 1,
+  "retries": 3,
+  "tools": ["Database", "Documents"],
   "document_ids": ["1fa85f64-5717-4562-b3fc-2c963f66afa1"]
 }
 ```
-*(Note: `ai_model_id` is accepted as an alias for `model_id`; `system_instructions` is accepted as an alias for `instructions`)*
-* **Response `201 Created`**:
-```json
-{
-  "id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-  "owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Maintenance Agent",
-  "description": "Industrial maintenance assistant",
-  "instructions": "Help analyze machine maintenance problems.",
-  "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "model": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "ai_model": {
-    "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-    "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-    "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-    "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "format": "gguf",
-    "status": "ready"
-  },
-  "created_at": "2026-09-03T14:30:00Z",
-  "updated_at": "2026-09-03T14:30:00Z",
-  "tools": [
-    {
-      "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2aa",
-      "name": "document_search",
-      "description": "Tool for document_search",
-      "handler": "default_document_search"
-    },
-    {
-      "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2bb",
-      "name": "file_reader",
-      "description": "Tool for file_reader",
-      "handler": "default_file_reader"
-    }
-  ],
-  "documents": [
-    {
-      "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-      "name": "machine_manual.pdf",
-      "file_path": "uploads/machine_manual.pdf",
-      "mime_type": "application/pdf",
-      "created_at": "2026-09-03T14:25:00Z"
-    }
-  ]
-}
-```
-
----
+*(Aliases supported: `ai_model_id` for `model_id`; `system_instructions` for `instructions`; `trigger_type` for `trigger`)*
+* **Response `201 Created`**: AgentResponse object.
 
 #### 3. Get Agent Details
 * **Method**: `GET`
 * **Path**: `/api/v1/agents/{id}`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**: Single agent object with `model_id` and nested `ai_model` metadata.
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
-
----
+* **Response `200 OK`**: AgentResponse object with populated `ai_model`, `tools`, `documents`, and computed `is_running`.
 
 #### 4. Update Agent
 * **Method**: `PUT` or `PATCH`
 * **Path**: `/api/v1/agents/{id}`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Request Body**:
-```json
-{
-  "name": "Maintenance Agent v2",
-  "description": "Updated maintenance assistant",
-  "instructions": "Diagnose machine anomalies and suggest repair procedures.",
-  "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "tools": ["document_search", "python_calculator"],
-  "document_ids": ["1fa85f64-5717-4562-b3fc-2c963f66afa1"]
-}
-```
-*(All fields are optional)*
-* **Response `200 OK`**: Single agent object with updated details and `model_id`.
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
-
----
+* **Request Body**: Any subset of `AgentUpdate` fields (`name`, `instructions`, `model_id`, `trigger`, `schedule`, `max_execution_time`, `max_tool_calls`, `concurrency`, `retries`, `tools`, `document_ids`).
+* **Response `200 OK`**: Updated AgentResponse object.
 
 #### 5. Delete Agent
 * **Method**: `DELETE`
 * **Path**: `/api/v1/agents/{id}`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
 * **Response `204 No Content`**
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
 
----
-
-#### 6. Run Agent Execution
+#### 6. Run Agent Execution (Interactive / On-Demand)
 * **Method**: `POST`
 * **Path**: `/api/v1/agents/{id}/run`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
 * **Request Body**:
 ```json
 {
-  "prompt": "Analyze vibration sensor readings in Section B and check against the manual.",
-  "conversation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+  "prompt": "Analyze vibration sensor readings in Section B against the manual.",
+  "conversation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "auto_restart": true
 }
 ```
 * **Response `200 OK`**:
@@ -465,25 +301,23 @@ Responsibilities:
   "execution_id": "e4eaaaf2-d142-11e1-b3e4-080027620cdd",
   "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
   "status": "completed",
-  "response": "Agent 'Maintenance Agent' completed execution for prompt: Analyze vibration sensor readings in Section B and check against the manual.",
-  "tool_calls": [],
+  "response": "Analysis indicates bearings in Section B are within 4% of nominal operating vibration.",
+  "tool_calls": [
+    {
+      "name": "Documents",
+      "arguments": {"query": "vibration tolerances Section B"},
+      "result": "Found 2 excerpts in Maintenance_Manual.pdf",
+      "status": "success"
+    }
+  ],
   "completed_at": "2026-09-03T14:45:10Z"
 }
 ```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
-
----
 
 #### 7. Stop Agent Execution
 * **Method**: `POST`
 * **Path**: `/api/v1/agents/{id}/stop`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
 * **Request Body** *(Optional)*:
 ```json
 {
@@ -496,77 +330,61 @@ Responsibilities:
   "execution_id": "e4eaaaf2-d142-11e1-b3e4-080027620cdd",
   "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
   "status": "stopped",
-  "message": "Execution for agent 'Maintenance Agent' stopped successfully",
+  "message": "Agent execution stopped successfully",
   "stopped_at": "2026-09-03T14:46:00Z"
 }
 ```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
 
----
-
-#### 8. List Running Agents (System Recovery)
+#### 8. List Running Agents (Active Supervisor)
 * **Method**: `GET`
 * **Path**: `/api/v1/agents/running`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Query Parameters**:
-  * `auto_restart_only` (boolean, default: false)
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "2da85f64-5717-4562-b3fc-2c963f66afa3",
-    "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-    "status": "running",
-    "auto_restart": true,
-    "started_at": "2026-09-03T14:45:10Z",
-    "last_heartbeat": "2026-09-03T14:55:00Z",
-    "configuration": "{\"prompt\": \"Monitor production line\"}"
-  }
-]
-```
-
----
+* **Response `200 OK`**: Returns `list[AgentResponse]` for all agents currently registered with active worker threads in the `runtime` table (`is_running = true`).
 
 #### 9. Get Agent Documents
 * **Method**: `GET`
 * **Path**: `/api/v1/agents/{id}/documents`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-    "name": "machine_manual.pdf",
-    "file_path": "uploads/machine_manual.pdf",
-    "mime_type": "application/pdf",
-    "created_at": "2026-09-03T14:50:00Z"
-  }
-]
-```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Agent not found"
-}
-```
+* **Response `200 OK`**: List of attached documents.
 
 ---
 
-### 3.1.3 AI Model Management Routes (GGUF Hugging Face)
+### 3.1.3 AI Model Management Routes (`/api/v1/models`)
 
-#### 1. Download Model from Hugging Face
+Supports open-weight `.gguf` models downloaded from Hugging Face or uploaded directly from the operator's machine.
+
+#### 1. Upload Local GGUF Model File
+* **Method**: `POST`
+* **Path**: `/api/v1/models/upload`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Content-Type**: `multipart/form-data`
+* **Form Parameters**:
+  * `file`: (binary `.gguf` file)
+* **Metadata Extraction**: Uploaded `.gguf` binaries are automatically inspected by `GGUFReader` to extract the model's internal name, architecture, and dominant tensor quantization format before creating the database entry. Manual entry of name and quantization is not required.
+* **Response `201 Created`**:
+```json
+{
+  "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
+  "name": "Qwen 2.5 7B Instruct (Q4_K_M)",
+  "repo_id": "local-upload",
+  "filename": "qwen2.5-7b-instruct-q4_k_m.gguf",
+  "file_path": "models/local-upload/qwen2.5-7b-instruct-q4_k_m.gguf",
+  "format": "gguf",
+  "size_bytes": 4681282048,
+  "quantization": "Q4_K_M",
+  "status": "ready",
+  "error_message": null,
+  "created_at": "2026-09-03T15:00:00Z",
+  "updated_at": "2026-09-03T15:00:00Z"
+}
+```
+* **Constraints**: Rejects non-`.gguf` files with `400 Bad Request`.
+
+#### 2. Download Model from Hugging Face
 * **Method**: `POST`
 * **Path**: `/api/v1/models/download`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Constraints**: **Only `.gguf` model files are supported**. Any non-`.gguf` filename is rejected with `400/422 Unprocessable Entity`.
-* **Query Parameters**:
-  * `background` (boolean, default: true)
+* **Query Parameters**: `background` (bool, default: true)
 * **Request Body**:
 ```json
 {
@@ -576,117 +394,53 @@ Responsibilities:
   "quantization": "Q4_K_M"
 }
 ```
-*(Note: `name` and `quantization` are optional and will be inferred from filename if omitted)*
-* **Response `202 Accepted`**:
-```json
-{
-  "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-  "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "format": "gguf",
-  "size_bytes": 669229056,
-  "quantization": "Q4_K_M",
-  "status": "ready",
-  "error_message": null,
-  "created_at": "2026-09-03T15:00:00Z",
-  "updated_at": "2026-09-03T15:02:10Z"
-}
-```
-* **Error `400 / 422 Bad Request`** (Non-GGUF file):
-```json
-{
-  "detail": "Only .gguf model files are supported"
-}
-```
+* **Response `202 Accepted`**: Model metadata with initial `downloading` status. Background thread fetches weights and updates status to `ready`.
 
----
-
-#### 2. List Downloaded AI Models
+#### 3. List Downloaded AI Models
 * **Method**: `GET`
 * **Path**: `/api/v1/models/`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Query Parameters**:
-  * `skip` (integer, default: 0)
-  * `limit` (integer, default: 100)
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-    "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-    "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-    "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "format": "gguf",
-    "size_bytes": 669229056,
-    "quantization": "Q4_K_M",
-    "status": "ready",
-    "error_message": null,
-    "created_at": "2026-09-03T15:00:00Z",
-    "updated_at": "2026-09-03T15:02:10Z"
-  }
-]
-```
+* **Response `200 OK`**: List of all registered AIModel objects.
 
----
-
-#### 3. Get AI Model Details
+#### 4. Check llama-server Installation & Models
 * **Method**: `GET`
-* **Path**: `/api/v1/models/{id}`
+* **Path**: `/api/v1/models/status` (or `/api/v1/models/check`)
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
 * **Response `200 OK`**:
 ```json
 {
-  "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-  "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "format": "gguf",
-  "size_bytes": 669229056,
-  "quantization": "Q4_K_M",
-  "status": "ready",
-  "error_message": null,
-  "created_at": "2026-09-03T15:00:00Z",
-  "updated_at": "2026-09-03T15:02:10Z"
-}
-```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "AI Model not found"
+  "installed": true,
+  "message": "llama.cpp is installed",
+  "server_path": "D:\\Code\\mix\\Agentic-AI-Workbench\\backend\\llama.cpp\\bin\\Release\\llama-server.exe",
+  "models": [ ... ]
 }
 ```
 
----
+#### 5. Start / Stop / Inspect llama-server via Model Routes
+* **Start Runtime**: `POST /api/v1/models/runtime/start`
+  * Body: `{"model": "qwen2.5", "port": 8080, "host": "127.0.0.1", "ctx_size": 4096, "n_gpu_layers": 99, "threads": 8}`
+* **Stop Runtime**: `POST /api/v1/models/runtime/stop`
+* **Get Runtime Status**: `GET /api/v1/models/runtime/status`
+* **Get Runtime Logs**: `GET /api/v1/models/runtime/logs?lines=100`
 
-#### 4. Delete AI Model
+#### 6. Delete AI Model
 * **Method**: `DELETE`
 * **Path**: `/api/v1/models/{id}`
 * **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Response `204 No Content`**
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "AI Model not found"
-}
-```
+* **Response `204 No Content`**: Removes model file from disk and deletes database record.
 
 ---
 
-### 3.1.4 Knowledge / Document Routes
+### 3.1.4 Knowledge / Document Routes (`/api/v1/documents`)
 
-#### 2. Upload Knowledge Document
+Manages company documents used by agents for Retrieval-Augmented Generation (RAG).
+
+#### 1. Upload Knowledge Document
 * **Method**: `POST`
 * **Path**: `/api/v1/documents/`
 * **Auth Required**: Yes (`Bearer <access_token>`)
 * **Content-Type**: `multipart/form-data`
-* **Form Fields**:
-  * `file`: (binary document: PDF, DOCX, TXT)
+* **Form Fields**: `file` (PDF, DOCX, TXT)
 * **Response `201 Created`**:
 ```json
 {
@@ -701,478 +455,310 @@ Responsibilities:
 }
 ```
 
----
-
-#### 3. List Documents
+#### 2. List Documents
 * **Method**: `GET`
 * **Path**: `/api/v1/documents/`
-* **Auth Required**: Yes (`Bearer <access_token>`)
-* **Query Parameters**:
-  * `skip` (integer, default: 0)
-  * `limit` (integer, default: 100)
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-    "name": "machine_manual.pdf",
-    "filename": "machine_manual.pdf",
-    "file_path": "uploads/a1b2c3d4_machine_manual.pdf",
-    "mime_type": "application/pdf",
-    "size_bytes": 1048576,
-    "status": "indexed",
-    "created_at": "2026-09-03T14:50:00Z"
-  }
-]
-```
+* **Response `200 OK`**: Array of document records.
 
----
-
-#### 4. Get Document Details
-* **Method**: `GET`
-* **Path**: `/api/v1/documents/{id}`
-* **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**:
-```json
-{
-  "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-  "name": "machine_manual.pdf",
-  "filename": "machine_manual.pdf",
-  "file_path": "uploads/a1b2c3d4_machine_manual.pdf",
-  "mime_type": "application/pdf",
-  "size_bytes": 1048576,
-  "status": "indexed",
-  "created_at": "2026-09-03T14:50:00Z"
-}
-```
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Document not found"
-}
-```
-
----
-
-#### 5. Download Document
+#### 3. Download Document
 * **Method**: `GET`
 * **Path**: `/api/v1/documents/{id}/download`
-* **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**: Binary file stream with `Content-Disposition: attachment; filename="machine_manual.pdf"`
-* **Error `404 Not Found`**:
-```json
-{
-  "detail": "Document not found"
-}
-```
+* **Response `200 OK`**: Binary file stream.
 
----
-
-#### 6. Delete Document
+#### 4. Delete Document
 * **Method**: `DELETE`
 * **Path**: `/api/v1/documents/{id}`
-* **Auth Required**: Yes (`Bearer <access_token>`)
-* **Path Parameters**: `id` (UUID)
 * **Response `204 No Content`**
-* **Error `404 Not Found`**:
+
+---
+
+### 3.1.5 Runtime Management Routes (`/api/v1/runtime`)
+
+Provides unified supervision for the active local model server and background agent worker threads.
+
+#### 1. Runtime Overview
+* **Method**: `GET`
+* **Path**: `/api/v1/runtime/overview`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Response `200 OK`**:
 ```json
 {
-  "detail": "Document not found"
+  "llama_installed": true,
+  "llama_server_path": "D:\\Code\\mix\\Agentic-AI-Workbench\\backend\\llama.cpp\\bin\\Release\\llama-server.exe",
+  "model_runtime": {
+    "running": true,
+    "ready": true,
+    "pid": 14280,
+    "model_path": "models/local-upload/qwen2.5-7b.gguf",
+    "model_name": "qwen2.5-7b",
+    "host": "127.0.0.1",
+    "port": 8080,
+    "ctx_size": 4096,
+    "n_gpu_layers": 99,
+    "threads": 8,
+    "base_url": "http://127.0.0.1:8080",
+    "health_url": "http://127.0.0.1:8080/health",
+    "uptime_seconds": 124.5
+  },
+  "active_agents_count": 1,
+  "active_agents": [
+    {
+      "id": "cfa044e9-eac5-4ca2-a6f9-0123456789ab",
+      "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
+      "agent_name": "Daily Sales Analyst",
+      "agent_model": "TinyLlama 1.1B Chat (Q4_K_M)",
+      "status": "running",
+      "thread_name": "agent-8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
+      "started_at": "2026-09-03T15:10:00Z",
+      "last_heartbeat": "2026-09-03T15:12:30Z"
+    }
+  ]
 }
 ```
 
----
+#### 2. Get Model Server Status
+* **Method**: `GET`
+* **Path**: `/api/v1/runtime/models/status`
+* **Response `200 OK`**: Detailed `ModelRuntimeStatusResponse`.
 
-## 3.2 Agent Manager
-
-The Agent Manager handles the lifecycle of agents.
-
-It should support:
-
-```text
-Create
-Read
-Update
-Delete
-```
-
-An agent configuration can contain:
-
-```text
-Agent
-├── ID
-├── Name
-├── Description
-├── System Instructions
-├── Model
-├── Tools
-├── Knowledge Sources
-└── Configuration
-```
-
-Example:
-
+#### 3. Start Model Server
+* **Method**: `POST`
+* **Path**: `/api/v1/runtime/models/start`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Request Body**:
 ```json
 {
-    "name": "Maintenance Agent",
-    "description": "Industrial maintenance assistant",
-    "model": "qwen",
-    "instructions": "Help analyze machine maintenance problems.",
-    "tools": [
-        "document_search",
-        "file_reader"
-    ]
+  "model": "TinyLlama 1.1B Chat (Q4_K_M)",
+  "port": 8080,
+  "host": "127.0.0.1",
+  "ctx_size": 4096,
+  "n_gpu_layers": 99,
+  "threads": 8,
+  "wait_ready": true,
+  "timeout": 30.0
+}
+```
+* **Response `200 OK`**: ModelRuntimeStatusResponse.
+
+#### 4. Stop Model Server
+* **Method**: `POST`
+* **Path**: `/api/v1/runtime/models/stop`
+* **Response `200 OK`**: Updated status with `running: false`.
+
+#### 5. Get Model Server Logs
+* **Method**: `GET`
+* **Path**: `/api/v1/runtime/models/logs?lines=100`
+* **Response `200 OK`**: `{"logs": ["line 1", "line 2", ...]}`
+
+#### 6. Test Model Inference
+* **Method**: `POST`
+* **Path**: `/api/v1/runtime/models/test`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Request Body**:
+```json
+{
+  "prompt": "Explain sovereign agentic AI in two sentences.",
+  "max_tokens": 128,
+  "temperature": 0.7
+}
+```
+* **Response `200 OK`**:
+```json
+{
+  "success": true,
+  "response": "Sovereign agentic AI ensures all data processing and reasoning remain completely on-premises. It prevents enterprise leaks by running local open-weight models without cloud dependencies.",
+  "latency_ms": 342.15,
+  "model": "TinyLlama 1.1B Chat (Q4_K_M)",
+  "usage": {
+    "prompt_tokens": 14,
+    "completion_tokens": 36,
+    "total_tokens": 50
+  }
 }
 ```
 
----
-
-# 4. Agent Runtime
-
-The Agent Runtime is the most important backend component.
-
-It executes the agent's task.
-
-Basic flow:
-
-```text
-User Request
-     ↓
-Load Agent Configuration
-     ↓
-Load Model
-     ↓
-Send Request to LLM
-     ↓
-LLM decides whether a tool is required
-     ↓
-Execute Tool
-     ↓
-Return Tool Result to LLM
-     ↓
-LLM continues reasoning
-     ↓
-Final Response
-```
-
-The runtime can be implemented as an agent loop:
-
-```text
-while task_not_finished:
-
-    send_context_to_model()
-
-    if model_requests_tool:
-        execute_tool()
-        add_result_to_context()
-
-    else:
-        return_final_response()
-```
-
-This loop is the core of the **agentic behavior**.
+#### 7. Active Agent Runtime Operations
+* **List Active Agents**: `GET /api/v1/runtime/agents`
+* **Start Agent Thread**: `POST /api/v1/runtime/agents/{agent_id}/start`
+* **Stop Agent Thread**: `POST /api/v1/runtime/agents/{agent_id}/stop`
 
 ---
 
-# 5. Local/Open-Weight Model Layer
+### 3.1.6 Settings & Governance Routes (`/api/v1/settings`)
 
-The backend should communicate with a locally running model server.
+Stores application-wide system configurations, limits, and customizable JSON key-value attributes.
 
-Possible model runtimes:
-
-```text
-Ollama
-vLLM
-llama.cpp
+#### 1. Get System Settings
+* **Method**: `GET`
+* **Path**: `/api/v1/settings/`
+* **Response `200 OK`**:
+```json
+{
+  "id": "c5ca4a9c-833c-4a33-8a33-abcdef123456",
+  "key": "general",
+  "data": {
+    "company_name": "Agentic AI Workbench",
+    "max_concurrent_agent_limit": 10,
+    "api_url": "http://localhost:8000/api/v1",
+    "environment": "development",
+    "default_timeout_seconds": 60,
+    "maintenance_mode": false,
+    "extra_values": {
+      "cluster_node_id": "AIRGAP-NODE-01",
+      "default_gpu_offload": "CUDA_ALL"
+    }
+  },
+  "created_at": "2026-09-03T12:00:00Z",
+  "updated_at": "2026-09-03T12:00:00Z"
+}
 ```
 
-Example:
+#### 2. Update System Settings
+* **Method**: `PUT`
+* **Path**: `/api/v1/settings/`
+* **Auth Required**: Yes (`Bearer <access_token>`)
+* **Request Body**:
+```json
+{
+  "company_name": "Industrial AI Labs",
+  "max_concurrent_agent_limit": 16,
+  "api_url": "http://localhost:8000/api/v1",
+  "environment": "production",
+  "default_timeout_seconds": 90,
+  "maintenance_mode": false,
+  "extra_values": {
+    "security_level": "RESTRICTED",
+    "backup_interval_hrs": "6"
+  }
+}
+```
+* **Response `200 OK`**: Updated SettingsResponse object.
+
+---
+
+# 4. Agent & Model Runtime Architecture
+
+The workbench uses a dual-engine architecture separating model serving from agent orchestration:
 
 ```text
-Agent Runtime
-      │
-      ▼
-Model Interface
-      │
-      ├── Ollama
-      ├── vLLM
-      └── llama.cpp
+┌────────────────────────────────────────────────────────────────────────┐
+│                        AGENT RUNTIME SUPERVISOR                        │
+│                                                                        │
+│   check_triggers() (Every 60s ticker)                                  │
+│         │                                                              │
+│         ├─► is_agent_due() (cron parser / interval parser)             │
+│         │                                                              │
+│         └─► execute_agent(agent_id)                                    │
+│                 │                                                      │
+│                 ├─► Register thread in `runtime` table                 │
+│                 ├─► Load system prompt + attached documents            │
+│                 ├─► Query ModelRuntime OpenAI endpoint                 │
+│                 ├─► Deterministic Tool Execution Loop (DB / Docs)      │
+│                 └─► Complete & clear `runtime` instance record         │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        MODEL RUNTIME SUPERVISOR                        │
+│                                                                        │
+│   subprocess: llama-server.exe (backend/llama.cpp)                     │
+│         │                                                              │
+│         ├── CLI parameters: -m [path.gguf] -c 4096 -ngl 99 -t 8        │
+│         ├── Health Probe: GET http://127.0.0.1:8080/health             │
+│         ├── In-Memory Log Ring Buffer (500 lines)                      │
+│         └── OpenAI-compatible endpoint: /v1/chat/completions           │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-The Agent Runtime should not be tightly coupled to one model provider.
+### 4.1 ModelRuntime (`backend/app/runtime/model_runtime.py`)
+* Manages a dedicated background subprocess running `llama-server.exe`.
+* Automatically resolves model paths across `models/` directory, Hugging Face subdirectories (`models/{repo}--{id}`), and database UUID lookups.
+* Captures standard output and error into a thread-safe `deque(maxlen=500)` buffer accessible via `/api/v1/runtime/models/logs`.
+* Exposes non-blocking readiness checks (`wait_until_ready`), process PID inspection, and uptime tracking.
 
-This allows different open-weight models to be used later.
+### 4.2 AgentRuntime (`backend/app/runtime/agent_runtime.py`)
+* Background daemon thread monitoring scheduled agents.
+* Evaluates `trigger` types:
+  * `manual`: Triggered on-demand via UI or API.
+  * `schedule`: Periodic intervals (e.g. `every 1 day at 09:00`, `every 4 hours`) or standard 5-part cron syntax via `schedule_parser.py`.
+  * `onetime`: Fires once at a specified ISO datetime stamp.
+* Enforces concurrency slots and tracks execution threads in the `runtime` database table.
+
+---
+
+# 5. Local / Open-Weight Model Layer
+
+The platform is strictly optimized for **GGUF (GPT-Generated Unified Format)** models executed through native `llama.cpp`.
+
+### Build & Compilation Automation
+The script `backend/build_llama.ps1` automates compiling `llama.cpp` natively for Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File backend/build_llama.ps1
+```
+It supports:
+* CPU with AVX / AVX2 / AVX512 vectorization.
+* GPU offloading via CUDA (NVIDIA) or Vulkan.
+* Binary artifacts output to `backend/llama.cpp/bin/Release/llama-server.exe`.
 
 ---
 
 # 6. Tool System
 
-Agents need tools to perform actions.
+Agents dynamically call registered deterministic tools:
+1. **Database**: Executes safe SQL statements against designated enterprise operational tables.
+2. **Documents**: Performs vector similarity search over embedded company knowledge files.
+3. **Email**: Formats and dispatches notification drafts to designated operational recipients.
+4. **File Reader**: Reads raw files from restricted workspace storage.
 
-Start with a small number of tools.
-
-Example:
-
-```text
-Tools
-├── File Reader
-├── Document Search
-├── Python Calculator
-└── Internal API
-```
-
-The Agent Runtime determines when a tool should be used.
-
-Example:
-
-```text
-User:
-Analyze the machine report.
-
-Agent
-   ↓
-Document Search
-   ↓
-Machine Report
-   ↓
-LLM Analysis
-   ↓
-Final Response
-```
-
-Tools should be permission-controlled so an agent only receives access to the tools assigned to it.
+Tools are permission-controlled via the `agent_tools` association table. Agents can only call tools explicitly assigned during agent configuration.
 
 ---
 
-# 7. Knowledge / RAG System
+# 7. Knowledge / RAG Pipeline
 
-The platform should allow users to upload confidential company documents.
-
-Example:
-
-```text
-PDF
-DOCX
-TXT
-CSV
-Images
-```
-
-Basic pipeline:
-
-```text
-Upload Document
-      ↓
-Extract Content
-      ↓
-Split into Chunks
-      ↓
-Create Embeddings
-      ↓
-Store in Vector Database
-      ↓
-Agent Search
-      ↓
-Retrieve Relevant Chunks
-      ↓
-Send Context to Local LLM
-```
-
-Possible local storage:
-
-```text
-PostgreSQL
-+
-pgvector
-```
-
-or a dedicated vector database such as Chroma.
-
-The important requirement is that the knowledge base can remain **on-premise**.
+* Documents (PDF, DOCX, TXT) are uploaded through `/api/v1/documents/`.
+* Content is extracted, chunked, and embedded using a local embedding model.
+* Embedded vectors are stored in PostgreSQL with `pgvector` or Chroma.
+* When an agent with document access receives a task, the runtime performs cosine similarity retrieval, augmenting the LLM prompt with relevant context snippets while keeping all documents on-premise.
 
 ---
 
-# 8. Database
+# 8. Relational Database Schema
 
-Use PostgreSQL for the main application database.
+Managed via SQLAlchemy and Alembic migrations:
 
-Possible tables:
-
-```text
-users
-refresh_tokens
-agents
-running_agents
-ai_models
-agent_tools
-agent_documents
-documents
-conversations
-messages
-executions
-execution_logs
-```
-
-Example:
-
-```text
-Agent
-│
-├── Model
-├── Tools
-├── Documents
-├── Conversations
-└── Execution Logs
-```
+| Table Name | Description | Key Columns |
+| :--- | :--- | :--- |
+| `users` | System operators and admins | `id`, `name`, `email`, `hashed_password`, `created_at` |
+| `refresh_tokens` | Single-use rotating refresh tokens | `id`, `user_id`, `token`, `expires_at`, `revoked` |
+| `agents` | AI agent configurations | `id`, `owner_id`, `name`, `instructions`, `model_id`, `trigger`, `schedule`, `max_execution_time`, `max_tool_calls`, `concurrency`, `retries` |
+| `runtime` | Currently executing agent threads | `id`, `agent_id`, `status`, `thread_name`, `started_at`, `last_heartbeat`, `configuration` |
+| `ai_models` | Downloaded / uploaded GGUF models | `id`, `name`, `repo_id`, `filename`, `file_path`, `format`, `quantization`, `size_bytes`, `status` |
+| `tools` | Registered system capabilities | `id`, `name`, `description`, `handler` |
+| `agent_tools` | Agent-to-tool permissions mapping | `agent_id`, `tool_id` |
+| `documents` | Uploaded knowledge files | `id`, `name`, `file_path`, `mime_type`, `size_bytes`, `status` |
+| `agent_documents` | Agent-to-document bindings | `agent_id`, `document_id` |
+| `settings` | System-wide config and JSONB values | `id`, `key`, `data` (JSON/JSONB), `created_at`, `updated_at` |
+| `conversations` | Chat and execution sessions | `id`, `agent_id`, `user_id`, `title`, `created_at` |
+| `messages` | Execution dialog messages | `id`, `conversation_id`, `role`, `content`, `created_at` |
+| `executions` | Completed execution logs | `id`, `agent_id`, `status`, `response`, `tool_calls`, `completed_at` |
 
 ---
 
-# 9. Security
+# 9. Security & Air-Gapped Operation
 
-Because this platform is intended for confidential industrial work, security is important.
-
-The backend should provide:
-
-* Authentication
-* Authorization
-* Agent-level permissions
-* Tool permissions
-* Document access control
-* Audit logs
-* Secure file handling
-
-Example:
-
-```text
-User
- ↓
-Authentication
- ↓
-Authorization
- ↓
-Agent
- ↓
-Allowed Tools
- ↓
-Allowed Documents
-```
-
-The backend should ensure an agent cannot access data or tools that it has not been given permission to use.
+1. **Zero External Telemetry**: All network operations bind to loopback (`127.0.0.1`) or private enterprise subnet IPs.
+2. **Deterministic Tool Sandboxing**: Agents cannot call arbitrary shell commands; only whitelisted Python handlers registered in `tools` are invocable.
+3. **Session Revocation**: Compromised refresh tokens are immediately revoked via database token rotation.
+4. **Local Model Integrity**: GGUF model files are stored locally and validated for file headers before loading into memory.
 
 ---
 
-# 10. On-Premise Deployment
+# 10. Technology Stack Summary
 
-The backend should be designed so that the entire system can run inside a company's infrastructure.
-
-Example:
-
-```text
-              COMPANY NETWORK
-
-┌─────────────────────────────────────┐
-│                                     │
-│        AI Workbench                 │
-│                                     │
-│  ┌───────────┐    ┌─────────────┐ │
-│  │ Frontend  │───►│ FastAPI     │ │
-│  └───────────┘    └──────┬──────┘ │
-│                          │        │
-│             ┌────────────┼──────┐ │
-│             ▼            ▼      ▼ │
-│         PostgreSQL     RAG     LLM │
-│                              Server│
-│                                     │
-│          Company Documents          │
-│          Company Databases          │
-│          Internal APIs              │
-│                                     │
-└─────────────────────────────────────┘
-```
-
-The system can be packaged using Docker for deployment.
-
----
-
-# 11. Recommended Backend Technology
-
-For the MVP:
-
-```text
-Python
-│
-├── FastAPI
-├── Pydantic
-├── SQLAlchemy
-├── PostgreSQL
-├── pgvector / Chroma
-├── Ollama
-└── PyMuPDF / python-docx
-```
-
-Optional later:
-
-```text
-Redis
-Celery
-vLLM
-Kubernetes
-```
-
-Do not add these until they are actually required.
-
----
-
-# 12. MVP Backend Priority
-
-Focus on these components first:
-
-```text
-1. FastAPI
-      ↓
-2. Agent CRUD
-      ↓
-3. Local LLM Connection
-      ↓
-4. Agent Runtime / Tool Loop
-      ↓
-5. Basic Tools
-      ↓
-6. Document Upload
-      ↓
-7. RAG
-      ↓
-8. Execution Logging
-```
-
-The most important demonstration should be:
-
-```text
-Create Agent
-      ↓
-Select Local Model
-      ↓
-Give Agent a Tool
-      ↓
-Upload Company Document
-      ↓
-Ask Agent a Question
-      ↓
-Agent searches document
-      ↓
-Agent uses local LLM
-      ↓
-Agent produces answer
-      ↓
-Execution is logged
-```
-
----
-
-# Core Backend Principle
-
-The backend should follow this principle:
-
-> **The LLM provides reasoning, the Agent Runtime controls execution, Tools provide capabilities, RAG provides company knowledge, and the local infrastructure keeps confidential data under the organization's control.**
+* **Runtime Language**: Python 3.12+
+* **Framework**: FastAPI + Uvicorn
+* **ORM & Database**: SQLAlchemy 2.0, Alembic, PostgreSQL / SQLite
+* **Local LLM Engine**: Native `llama.cpp` (`llama-server.exe`)
+* **Package Management**: `uv` / `pip`
+* **Model Format**: `.gguf` (Quantized Q4_K_M, Q5_K_M, Q8_0, etc.)

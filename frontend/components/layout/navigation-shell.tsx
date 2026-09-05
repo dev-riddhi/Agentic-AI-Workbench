@@ -42,13 +42,21 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const isChatPage = pathname === '/chat';
+
   // Authenticated user: show persistent sidebar, header, and workbench features
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-100">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className={`flex-1 flex flex-col min-w-0 ${isChatPage ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         <Header />
-        <main className="flex-1 p-6 md:p-8 bg-zinc-950/60 max-w-7xl w-full mx-auto">
+        <main
+          className={
+            isChatPage
+              ? 'flex-1 flex flex-col min-h-0 overflow-hidden'
+              : 'flex-1 p-6 md:p-8 bg-zinc-950/60 max-w-7xl w-full mx-auto'
+          }
+        >
           {children}
         </main>
       </div>

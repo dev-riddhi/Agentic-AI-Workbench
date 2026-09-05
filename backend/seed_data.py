@@ -5,7 +5,6 @@ from database.models.user import User
 from database.models.ai_model import AIModel
 from database.models.agent import Agent
 from database.models.document import Document
-from database.models.tool import Tool
 
 def seed_workbench():
     with SessionLocal() as db:
@@ -50,8 +49,8 @@ def seed_workbench():
             db.refresh(doc)
             print(f"Seeded Document: {doc.name} ({doc.id})")
 
-        # 3. Get Tools
-        tools = db.query(Tool).all()
+        # 3. Default tools for industrial diagnostic agent
+        tools = ["read_file", "search_files", "parse_pdf"]
 
         # 4. Seed Agent
         agent = db.query(Agent).filter(Agent.name == "Industrial Diagnostic Agent").first()

@@ -1,12 +1,17 @@
+import logging
 import os
 from pathlib import Path
 import re
 import shutil
+from typing import Any
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
+from gguf import GGUFReader
 from huggingface_hub import hf_hub_download
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.features.ai_model import model
 from app.features.ai_model.schemas import AIModelDownloadRequest
@@ -202,16 +207,68 @@ def upload_ai_model_controller(
         file.file.close()
 
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
-    base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
-    friendly_name = name.strip() if name and name.strip() else base_name
-    quant = (quantization.strip().upper() if quantization and quantization.strip() else None) or extract_quantization(safe_filename) or "CUSTOM"
 
+    # Use GGUFReader to automatically read model info from the uploaded binary
+    friendly_name: str | None = None
+    quant: str | None = None
+
+    try:
+        reader = GGUFReader(file_path)
+
+        def get_field_val(field_name: str) -> str | None:
+            f = reader.fields.get(field_name)
+            if not f:
+                return None
+            try:
+                val = f.contents()
+                if isinstance(val, (bytes, bytearray)):
+                    return val.decode("utf-8", errors="ignore").strip()
+                return str(val).strip()
+            except Exception:
+                return None
+
+        # 1. Extract model name from GGUF metadata
+        gguf_name = (
+            get_field_val("general.name")
+            or get_field_val("general.basename")
+            or get_field_val("general.base_model.0.name")
+        )
+
+        # 2. Extract quantization type from GGUF tensors
+        tensor_quant_types = [
+            t.tensor_type.name
+            for t in reader.tensors
+            if t.tensor_type.name not in ("F32", "F16", "UNKNOWN")
+        ]
+        if tensor_quant_types:
+            quant = max(set(tensor_quant_types), key=tensor_quant_types.count).upper()
+        else:
+            quant = extract_quantization(safe_filename)
+
+        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
+        model_name = gguf_name or base_name
+
+        # If quantization not already present in the model name, format friendly display name
+        if quant and quant not in model_name.upper():
+            friendly_name = f"{model_name} ({quant})"
+        else:
+            friendly_name = model_name
+
+    except Exception as exc:
+        logger.warning("Failed to extract GGUFReader metadata for '%s': %s", file_path, exc)
+        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
+        quant = extract_quantization(safe_filename) or "CUSTOM"
+        friendly_name = f"{base_name} ({quant})" if quant and quant not in base_name else base_name
+
+    # Check if model is already registered
     existing_model = model.get_ai_model_by_repo_and_file(
         db=db,
         repo_id=repo_id,
         filename=safe_filename,
     )
     if existing_model:
+        existing_model.name = friendly_name
+        existing_model.quantization = quant
         return model.update_ai_model_status(
             db=db,
             model=existing_model,

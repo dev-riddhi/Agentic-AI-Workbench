@@ -9,7 +9,6 @@ from database.database import SessionLocal
 from database.models.agent import Agent
 from database.models.conversation import Conversation
 from database.models.document import Document
-from database.models.tool import Tool
 from database.models.user import User
 
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import {
   Cpu,
   Download,
@@ -14,44 +15,18 @@ import {
   FileUp,
   FileText,
   X,
-  Activity,
-  Play,
-  Square,
-  Terminal,
-  Copy,
-  Check,
-  RefreshCw,
-  Send,
-  Zap,
-  Power,
+  MessageSquare,
 } from 'lucide-react';
-import { AIModelResponse, LlamaServerStatusResponse, ModelRuntimeStatus } from '@/lib/api/types';
+import { AIModelResponse, LlamaServerStatusResponse } from '@/lib/api/types';
 import { modelsApi } from '@/lib/api/models';
-import { runtimeApi } from '@/lib/api/runtime';
 import { useToast } from '@/context/toast-context';
 
 export default function ModelsPage() {
   const { toast, confirm } = useToast();
-  const [activeTab, setActiveTab] = useState<'downloaded' | 'upload' | 'hf' | 'runtime'>('downloaded');
+  const [activeTab, setActiveTab] = useState<'downloaded' | 'upload' | 'hf'>('downloaded');
   const [models, setModels] = useState<AIModelResponse[]>([]);
   const [serverStatus, setServerStatus] = useState<LlamaServerStatusResponse | null>(null);
-  const [runtimeStatus, setRuntimeStatus] = useState<ModelRuntimeStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Runtime Controls state
-  const [selectedRuntimeModel, setSelectedRuntimeModel] = useState<string>('');
-  const [runtimePort, setRuntimePort] = useState<number>(8080);
-  const [runtimeCtxSize, setRuntimeCtxSize] = useState<number>(4096);
-  const [runtimeGpuLayers, setRuntimeGpuLayers] = useState<number>(99);
-  const [isStartingRuntime, setIsStartingRuntime] = useState(false);
-  const [isStoppingRuntime, setIsStoppingRuntime] = useState(false);
-  const [runtimeLogs, setRuntimeLogs] = useState<string[]>([]);
-  const [isFetchingLogs, setIsFetchingLogs] = useState(false);
-  const [testPrompt, setTestPrompt] = useState('Explain sovereign agentic AI in two sentences.');
-  const [testResponse, setTestResponse] = useState<string | null>(null);
-  const [testLatency, setTestLatency] = useState<number | null>(null);
-  const [isTestingModel, setIsTestingModel] = useState(false);
-  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
 
   // HuggingFace Form state
   const [repoId, setRepoId] = useState('');
@@ -65,8 +40,6 @@ export default function ModelsPage() {
 
   // Local Device Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadModelName, setUploadModelName] = useState('');
-  const [uploadQuantization, setUploadQuantization] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -100,136 +73,10 @@ export default function ModelsPage() {
         if (active) setIsLoading(false);
       });
 
-    // Also fetch initial model runtime status
-    runtimeApi.getModelStatus()
-      .then((st) => {
-        if (active && st) {
-          setRuntimeStatus(st);
-          if (st.model_name) setSelectedRuntimeModel(st.model_name);
-        }
-      })
-      .catch(() => {});
-
     return () => {
       active = false;
     };
   }, [toast]);
-
-  // Periodic polling for runtime status when in runtime tab
-  useEffect(() => {
-    if (activeTab !== 'runtime') return;
-    let active = true;
-
-    const poll = () => {
-      runtimeApi.getModelStatus()
-        .then((st) => {
-          if (active && st) setRuntimeStatus(st);
-        })
-        .catch(() => {});
-    };
-
-    poll();
-    const interval = setInterval(poll, 4000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [activeTab]);
-
-  const fetchRuntimeStatus = async () => {
-    try {
-      const status = await runtimeApi.getModelStatus();
-      setRuntimeStatus(status);
-      if (status.model_name && !selectedRuntimeModel) {
-        setSelectedRuntimeModel(status.model_name);
-      }
-    } catch {
-      // Ignored
-    }
-  };
-
-  const handleStartRuntime = async () => {
-    const targetModel = selectedRuntimeModel || (models.length > 0 ? models[0].name : '');
-    if (!targetModel) {
-      toast.warning('No GGUF models available. Please upload or download a model first.', 'No Model Selected');
-      return;
-    }
-    setIsStartingRuntime(true);
-    try {
-      const status = await runtimeApi.startModel({
-        model: targetModel,
-        port: Number(runtimePort) || 8080,
-        ctx_size: Number(runtimeCtxSize) || 4096,
-        n_gpu_layers: Number(runtimeGpuLayers) || 99,
-        wait_ready: true,
-      });
-      setRuntimeStatus(status);
-      toast.success(
-        `llama-server online on port ${status.port} running model "${status.model_name}"`,
-        'Server Ready'
-      );
-      handleFetchLogs();
-    } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to start llama-server.';
-      toast.error(detail, 'Start Error');
-    } finally {
-      setIsStartingRuntime(false);
-    }
-  };
-
-  const handleStopRuntime = async () => {
-    setIsStoppingRuntime(true);
-    try {
-      const status = await runtimeApi.stopModel();
-      setRuntimeStatus(status);
-      toast.info('llama-server process stopped.', 'Server Stopped');
-    } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to stop llama-server.';
-      toast.error(detail, 'Stop Error');
-    } finally {
-      setIsStoppingRuntime(false);
-    }
-  };
-
-  const handleFetchLogs = async () => {
-    setIsFetchingLogs(true);
-    try {
-      const res = await runtimeApi.getModelLogs(150);
-      setRuntimeLogs(res.logs || []);
-    } catch {
-      // Ignored
-    } finally {
-      setIsFetchingLogs(false);
-    }
-  };
-
-  const handleTestPrompt = async () => {
-    if (!testPrompt.trim()) return;
-    setIsTestingModel(true);
-    setTestResponse(null);
-    setTestLatency(null);
-    try {
-      const res = await runtimeApi.testModel({
-        prompt: testPrompt,
-        max_tokens: 150,
-      });
-      setTestResponse(res.response);
-      setTestLatency(res.latency_ms);
-      toast.success(`Inference finished in ${res.latency_ms}ms`, 'Inference Completed');
-    } catch (err: unknown) {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Inference test failed.';
-      toast.error(detail, 'Inference Error');
-    } finally {
-      setIsTestingModel(false);
-    }
-  };
 
   const handleDelete = async (id: string, name: string) => {
     const ok = await confirm({
@@ -301,18 +148,6 @@ export default function ModelsPage() {
 
     setUploadError(null);
     setUploadFile(file);
-
-    // Auto-populate friendly name from filename
-    const baseName = file.name.replace(/\.gguf$/i, '');
-    setUploadModelName(baseName);
-
-    // Auto-detect quantization from filename
-    const match = file.name.match(/\b(q[0-9]_[a-z0-9_]+|f16|f32|bf16)\b/i);
-    if (match) {
-      setUploadQuantization(match[1].toUpperCase());
-    } else {
-      setUploadQuantization('');
-    }
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
@@ -329,8 +164,6 @@ export default function ModelsPage() {
     try {
       const created = await modelsApi.uploadModel(
         uploadFile,
-        uploadModelName.trim() || undefined,
-        uploadQuantization.trim() || undefined,
         (progressEvent) => {
           if (progressEvent.total) {
             const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -343,8 +176,6 @@ export default function ModelsPage() {
       setUploadSuccess(true);
       toast.success(`Model "${created.name}" uploaded successfully and ready for runtime execution!`, 'Model Uploaded');
       setUploadFile(null);
-      setUploadModelName('');
-      setUploadQuantization('');
 
       setTimeout(() => {
         setUploadSuccess(false);
@@ -420,25 +251,6 @@ export default function ModelsPage() {
             <Download className="w-3.5 h-3.5" />
             Hugging Face Downloader
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('runtime');
-              fetchRuntimeStatus();
-              handleFetchLogs();
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'runtime'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5" />
-            Model Runtime
-            {runtimeStatus?.running && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
-            )}
-          </button>
         </div>
       </div>
 
@@ -468,18 +280,13 @@ export default function ModelsPage() {
             </div>
           </div>
           {serverStatus.installed ? (
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('runtime');
-                fetchRuntimeStatus();
-                handleFetchLogs();
-              }}
+            <Link
+              href="/runtime"
               className="text-[11px] bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-md border border-cyan-500/20 shrink-0 font-medium flex items-center gap-1 cursor-pointer transition-colors"
             >
               <span>Manage Runtime</span>
               <span className="text-xs">&rarr;</span>
-            </button>
+            </Link>
           ) : (
             <span className="text-[11px] bg-amber-500/10 text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/20 shrink-0 font-mono">
               Run: powershell -File backend/build_llama.ps1
@@ -565,14 +372,25 @@ export default function ModelsPage() {
                       In-Memory Ready
                     </span>
 
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(m.id, m.name)}
-                      className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                      title="Delete Model from Disk"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/chat?modelId=${m.id}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-[11px] font-medium transition-colors"
+                        title="Open chat with this model"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        <span>Chat</span>
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(m.id, m.name)}
+                        className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Model from Disk"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -674,8 +492,6 @@ export default function ModelsPage() {
                   disabled={isUploading}
                   onClick={() => {
                     setUploadFile(null);
-                    setUploadModelName('');
-                    setUploadQuantization('');
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
                   className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
@@ -685,32 +501,14 @@ export default function ModelsPage() {
               </div>
             )}
 
-            {/* Model Metadata Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-                  MODEL NAME
-                </label>
-                <input
-                  type="text"
-                  value={uploadModelName}
-                  onChange={(e) => setUploadModelName(e.target.value)}
-                  placeholder="e.g. Llama 3 8B Instruct"
-                  className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-                  QUANTIZATION
-                </label>
-                <input
-                  type="text"
-                  value={uploadQuantization}
-                  onChange={(e) => setUploadQuantization(e.target.value)}
-                  placeholder="e.g. Q4_K_M, Q5_K_M, F16"
-                  className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono"
-                />
+            {/* Automatic GGUF Metadata Extraction Notice */}
+            <div className="p-3.5 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-zinc-400 text-xs flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-zinc-200">Automatic GGUF Metadata Inspection</span>
+                <p className="text-[11px] text-zinc-400">
+                  Model name, architecture, and quantization will be automatically detected and extracted directly from the GGUF binary headers using <span className="font-mono text-cyan-400">GGUFReader</span> upon upload.
+                </p>
               </div>
             </div>
 
@@ -891,319 +689,6 @@ export default function ModelsPage() {
               )}
             </button>
           </form>
-        </div>
-      )}
-
-      {/* TAB 4: MODEL RUNTIME (LLAMA-SERVER SUBPROCESS) */}
-      {activeTab === 'runtime' && (
-        <div className="space-y-6">
-          {/* Status Hero Card */}
-          <div className="p-6 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${
-                    runtimeStatus?.running
-                      ? 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-md shadow-emerald-500/20'
-                      : 'bg-zinc-800 text-zinc-400'
-                  }`}
-                >
-                  <Cpu className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-zinc-100">
-                      Local llama-server Subprocess Daemon
-                    </h3>
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono border ${
-                        runtimeStatus?.ready
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : runtimeStatus?.running
-                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          : 'bg-zinc-800/60 text-zinc-400 border-zinc-700'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          runtimeStatus?.ready
-                            ? 'bg-emerald-400 animate-pulse'
-                            : runtimeStatus?.running
-                            ? 'bg-amber-400 animate-spin'
-                            : 'bg-zinc-500'
-                        }`}
-                      />
-                      {runtimeStatus?.ready
-                        ? 'ONLINE & READY'
-                        : runtimeStatus?.running
-                        ? 'LOADING WEIGHTS'
-                        : 'OFFLINE / STOPPED'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-zinc-400 mt-0.5 font-mono">
-                    {runtimeStatus?.running
-                      ? `Active PID: ${runtimeStatus.pid} • Model: ${runtimeStatus.model_name || 'GGUF'} • Uptime: ${runtimeStatus.uptime_seconds || 0}s`
-                      : 'Server is currently stopped. Launch with any local GGUF model below.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={fetchRuntimeStatus}
-                  className="p-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-                  title="Refresh status"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                {runtimeStatus?.running ? (
-                  <button
-                    type="button"
-                    onClick={handleStopRuntime}
-                    disabled={isStoppingRuntime}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>{isStoppingRuntime ? 'Stopping...' : 'Stop Server'}</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleStartRuntime}
-                    disabled={isStartingRuntime}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>{isStartingRuntime ? 'Starting...' : 'Start Server'}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Connection Bar */}
-            {runtimeStatus?.running && (
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-zinc-800/80 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-500">OpenAI Base URL:</span>
-                  <code className="text-cyan-300 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
-                    {runtimeStatus.base_url}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(runtimeStatus.base_url);
-                      setCopiedEndpoint(true);
-                      setTimeout(() => setCopiedEndpoint(false), 2000);
-                    }}
-                    className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-                    title="Copy API Base URL"
-                  >
-                    {copiedEndpoint ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
-                  <span>Ctx: <b className="text-zinc-200">{runtimeStatus.ctx_size}</b></span>
-                  <span>GPU Offload: <b className="text-zinc-200">{runtimeStatus.n_gpu_layers} layers</b></span>
-                  <span>Threads: <b className="text-zinc-200">{runtimeStatus.threads || 'Auto'}</b></span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Control & Configuration Card */}
-            <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <Power className="w-4 h-4 text-cyan-400" />
-                Runtime Model & Runner Configuration
-              </h3>
-
-              <div className="space-y-3 text-xs">
-                <div>
-                  <label className="block text-zinc-400 font-mono mb-1">
-                    SELECT GGUF MODEL
-                  </label>
-                  {models.length === 0 ? (
-                    <div className="p-3 rounded-xl bg-zinc-950 border border-dashed border-zinc-800 text-zinc-500 text-xs">
-                      No models found in backend. Upload or download a GGUF model first.
-                    </div>
-                  ) : (
-                    <select
-                      value={selectedRuntimeModel}
-                      onChange={(e) => setSelectedRuntimeModel(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
-                    >
-                      <option value="">-- Choose a local model --</option>
-                      {models.map((m) => (
-                        <option key={m.id} value={m.name}>
-                          {m.name} ({m.quantization || 'GGUF'} • {formatFileSize(m.size_bytes)})
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-zinc-400 font-mono mb-1">
-                      PORT
-                    </label>
-                    <input
-                      type="number"
-                      value={runtimePort}
-                      onChange={(e) => setRuntimePort(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-zinc-400 font-mono mb-1">
-                      CONTEXT (TOKENS)
-                    </label>
-                    <select
-                      value={runtimeCtxSize}
-                      onChange={(e) => setRuntimeCtxSize(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                    >
-                      <option value={2048}>2048</option>
-                      <option value={4096}>4096</option>
-                      <option value={8192}>8192</option>
-                      <option value={16384}>16384</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-zinc-400 font-mono mb-1">
-                      GPU LAYERS
-                    </label>
-                    <input
-                      type="number"
-                      value={runtimeGpuLayers}
-                      onChange={(e) => setRuntimeGpuLayers(Number(e.target.value))}
-                      placeholder="99 = Max"
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleStartRuntime}
-                  disabled={isStartingRuntime || models.length === 0}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
-                >
-                  {isStartingRuntime ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Booting llama-server...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4" />
-                      <span>{runtimeStatus?.running ? 'Switch & Reload Model' : 'Launch llama-server'}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Inference Diagnostic / Quick Test Card */}
-            <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4 flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2 mb-3">
-                  <Send className="w-4 h-4 text-cyan-400" />
-                  Live Inference Test (OpenAI-compatible)
-                </h3>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-mono text-zinc-400 mb-1">
-                      TEST PROMPT
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={testPrompt}
-                      onChange={(e) => setTestPrompt(e.target.value)}
-                      placeholder="Prompt the active model directly..."
-                      className="w-full px-3 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 resize-none"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleTestPrompt}
-                    disabled={isTestingModel || !runtimeStatus?.ready}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {isTestingModel ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-cyan-300 border-t-transparent rounded-full animate-spin" />
-                        <span>Generating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Execute Prompt</span>
-                      </>
-                    )}
-                  </button>
-
-                  {testResponse && (
-                    <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs space-y-1 animate-in fade-in">
-                      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
-                        <span>MODEL OUTPUT</span>
-                        {testLatency && <span className="text-cyan-400">{testLatency} ms</span>}
-                      </div>
-                      <p className="text-zinc-200 leading-relaxed font-sans">{testResponse}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {!runtimeStatus?.ready && (
-                <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] text-zinc-500">
-                  Model must be started and reported <b className="text-emerald-400">READY</b> before running live diagnostic inference.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Real-Time Terminal Console Logs Card */}
-          <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-cyan-400" />
-                llama-server Process Output & Hardware Telemetry
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-mono text-zinc-500">
-                  {runtimeLogs.length} lines captured
-                </span>
-                <button
-                  type="button"
-                  onClick={handleFetchLogs}
-                  disabled={isFetchingLogs}
-                  className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800 cursor-pointer"
-                  title="Refresh console logs"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isFetchingLogs ? 'animate-spin' : ''}`} />
-                  <span>Fetch Logs</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-xl bg-black border border-zinc-800/80 font-mono text-[11px] text-zinc-300 h-64 overflow-y-auto space-y-1 select-text">
-              {runtimeLogs.length === 0 ? (
-                <div className="text-zinc-600 italic">No output logged yet. Start the model server to stream console stdout/stderr.</div>
-              ) : (
-                runtimeLogs.map((line, idx) => (
-                  <div key={idx} className="leading-tight hover:bg-zinc-900/50">
-                    {line}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       )}
     </div>

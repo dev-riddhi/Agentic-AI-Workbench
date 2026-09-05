@@ -22,9 +22,17 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Local Model Hub',
     subtitle: 'Manage downloaded GGUF quantizations and Hugging Face imports',
   },
+  '/chat': {
+    title: 'Model Chat & Inference',
+    subtitle: 'Converse directly with loaded local GGUF models and test prompt reasoning',
+  },
+  '/runtime': {
+    title: 'Runtime Status & Diagnostics',
+    subtitle: 'Inspect agent runtime workers and local model runtime daemon',
+  },
   '/operations': {
-    title: 'Running Operations & Telemetry',
-    subtitle: 'Monitor supervisor heartbeats, execution states, and host isolation',
+    title: 'Runtime Status & Diagnostics',
+    subtitle: 'Inspect agent runtime workers and local model runtime daemon',
   },
   '/settings': {
     title: 'Workbench Settings',

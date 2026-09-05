@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from database.models import Agent, AgentTrigger, Document, Tool, Runtime
+from database.models import Agent, AgentTrigger, Document, AgentTool, Runtime
 
 
 def get_agents(
@@ -16,7 +16,7 @@ def get_agents(
     statement = (
         select(Agent)
         .options(
-            selectinload(Agent.tools),
+            selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
             selectinload(Agent.runtime_instances),
@@ -34,7 +34,7 @@ def get_agent(db: Session, agent_id: UUID) -> Agent | None:
     statement = (
         select(Agent)
         .options(
-            selectinload(Agent.tools),
+            selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
             selectinload(Agent.runtime_instances),
@@ -44,30 +44,11 @@ def get_agent(db: Session, agent_id: UUID) -> Agent | None:
     return db.scalar(statement)
 
 
-def resolve_tools(db: Session, identifiers: list[str]) -> list[Tool]:
-    tools: list[Tool] = []
-    for ident in identifiers:
-        tool: Tool | None = None
-        try:
-            tool_uuid = UUID(ident)
-            tool = db.scalar(select(Tool).where(Tool.id == tool_uuid))
-        except (ValueError, AttributeError):
-            pass
-
-        if not tool:
-            tool = db.scalar(select(Tool).where(Tool.name == ident))
-
-        if not tool:
-            tool = Tool(
-                name=ident,
-                description=f"Tool for {ident}",
-                handler=f"default_{ident}",
-            )
-            db.add(tool)
-            db.flush()
-
-        tools.append(tool)
-    return tools
+def resolve_tools(db: Session | None = None, identifiers: list[str] | None = None) -> list[str]:
+    """Returns list of clean tool name strings."""
+    if not identifiers:
+        return []
+    return [ident.strip() for ident in identifiers if ident and ident.strip()]
 
 
 def resolve_documents(db: Session, doc_ids: list[UUID]) -> list[Document]:
@@ -91,7 +72,7 @@ def create_agent(
     max_tool_calls: int = 50,
     concurrency: int = 1,
     retries: int = 3,
-    tools: list[Tool] | None = None,
+    tools: list[str] | None = None,
     documents: list[Document] | None = None,
 ) -> Agent:
     agent = Agent(
@@ -133,7 +114,7 @@ def update_agent(
     max_tool_calls: int | None = None,
     concurrency: int | None = None,
     retries: int | None = None,
-    tools: list[Tool] | None = None,
+    tools: list[str] | None = None,
     documents: list[Document] | None = None,
 ) -> Agent:
     if name is not None:
@@ -212,7 +193,7 @@ def get_running_agents(
         .join(Runtime, Runtime.agent_id == Agent.id)
         .where(Runtime.status == "running")
         .options(
-            selectinload(Agent.tools),
+            selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
             selectinload(Agent.runtime_instances),

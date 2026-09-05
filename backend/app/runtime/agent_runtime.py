@@ -54,6 +54,7 @@ class AgentRuntime:
         current_thread_name = threading.current_thread().name
         print(f"Agent {agent_id} running on thread {current_thread_name}")
 
+        working = True
         # Register running instance in the runtime table
         with SessionLocal() as db:
             try:
@@ -67,8 +68,7 @@ class AgentRuntime:
                 print(f"Error registering agent {agent_id} in runtime table: {e}")
 
         try:
-            # Agent execution loop / task execution goes here
-            # Simulate execution or run agent logic
+            # while working:
             pass
         finally:
             # Deregister or update status in runtime table upon completion

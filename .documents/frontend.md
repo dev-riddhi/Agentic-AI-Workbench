@@ -2,815 +2,352 @@
 
 ## 1. Main Goal
 
-The frontend provides a simple interface for users to:
+The frontend is the visual control console and orchestration interface for the Sovereign On-Premise Agentic AI Workbench.
 
-* Create AI agents
-* Configure AI agents
-* Select a local/open-weight AI model
-* Give agents tools
-* Upload knowledge/documents
-* Run and chat with agents
-* Manage existing agents
+Its primary goal is to provide enterprise operators, engineers, and administrators with an intuitive, responsive, and secure interface to:
 
-The frontend should focus on **simplicity and usability**, not on building a large number of advanced features.
+> **Design, configure, schedule, supervise, and interact with autonomous AI agents powered by locally running open-weight GGUF models, while maintaining strict air-gapped security and zero external telemetry.**
 
 ---
 
 ## 2. Frontend Architecture
 
-```text
-                    FRONTEND
-                       │
-                       ▼
-              ┌─────────────────┐
-              │   Web Interface │
-              └────────┬────────┘
-                       │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-      Agent UI      Model UI     Settings
-          │
-          ▼
-    Agent Workspace
-          │
-    ┌─────┼─────────────┐
-    ▼     ▼             ▼
- Configure Tools      Knowledge
- Agent                /Documents
-          │
-          ▼
-       Chat / Run
-          │
-          ▼
-      Backend API
-```
-
----
-
-## 3. Main Screens
-
-### 3.1 Agent List
-
-The main screen displays all available agents.
-
-Users should be able to:
-
-* View agents
-* Open an agent
-* Edit an agent
-* Delete an agent
-* Create a new agent
-
-Example:
+The frontend is built with **Next.js 15+ (App Router)**, **React 19**, **TypeScript**, and **Tailwind CSS**, using a dark, modern industrial control aesthetic (Zinc 950 palette with Cyan, Emerald, and Indigo accents).
 
 ```text
-AI Workbench
-
-My Agents
-
-┌─────────────────────────────────┐
-│ Maintenance Agent               │
-│ Machine maintenance assistant   │
-│ Model: Qwen                     │
-│                                 │
-│ [Open] [Edit] [Delete]          │
-└─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│ Document Assistant              │
-│ Company document assistant      │
-│ Model: Llama                    │
-│                                 │
-│ [Open] [Edit] [Delete]          │
-└─────────────────────────────────┘
-
-             [+ Create Agent]
+                                   ROOT LAYOUT (`app/layout.tsx`)
+                                                  │
+                   ┌──────────────────────────────┼──────────────────────────────┐
+                   ▼                              ▼                              ▼
+            <Providers>                     <AuthProvider>                 <ToastProvider>
+         (Theme & Query Cache)         (JWT & Refresh Rotation)        (Toasts & Modal Dialogs)
+                                                  │
+                                                  ▼
+                                      <NavigationShell>
+                                                  │
+                  ┌───────────────────────────────┴───────────────────────────────┐
+                  ▼                                                               ▼
+        [If Unauthenticated]                                            [If Authenticated]
+           Login Screen                                              ┌────────────────────────┐
+       (`app/auth/login/page.tsx`)                                   │ Sidebar + Header Shell │
+                                                                     └───────────┬────────────┘
+                                                                                 │
+        ┌───────────────────┬───────────────────┬───────────────────┬────────────┴───────┬───────────────────┐
+        ▼                   ▼                   ▼                   ▼                    ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐   ┌───────────────┐
+│    Agents     │   │ Agent Builder │   │ Agent Console │   │   Knowledge   │    │   Model Hub   │   │    Runtime    │
+│   Workspace   │   │  & Scheduler  │   │  (Run / Chat) │   │     Vault     │    │  (GGUF Store) │   │    Status     │
+│ (`/agents`)   │   │(`/agents/new`)│   │(`/agents/[id]`)   │ (`/documents`)│    │ (`/models`)   │   │ (`/runtime`)  │
+└───────────────┘   └───────────────┘   └───────────────┘   └───────────────┘    └───────────────┘   └───────────────┘
+                                                                                                           │
+                                                                                                           ▼
+                                                                                                 ┌───────────────────┐
+                                                                                                 │    Settings &     │
+                                                                                                 │    Governance     │
+                                                                                                 │   (`/settings`)   │
+                                                                                                 └───────────────────┘
 ```
+
+### 2.1 Key Design Elements
+* **Air-Gapped Status Indicator**: Persistent badge in the sidebar verifying local loopback connection (`127.0.0.1`) and strict 0.0 KB egress.
+* **Dual Runtime Visibility**: Real-time status cards reflecting both background agent worker threads and the local `llama-server.exe` instance.
+* **Deterministic Configuration**: Full exposure of agent triggers (manual, schedule, onetime), execution parameters (max execution time, max tool calls, concurrency, retries), and tool attachments.
+* **Token Rotation Interceptor**: Client-side Axios interceptor transparently refreshes expired JWT access tokens using single-use rotating refresh tokens without interrupting user workflows.
 
 ---
 
-### 3.2 Create Agent
+# 3. Core Workspaces & Application Screens
 
-This is one of the most important screens.
+### 3.1 Agents Workspace (`/app/agents/page.tsx`)
 
-The user should be able to configure:
+The central dashboard displaying all configured AI agents in the organization.
 
-* Agent name
-* Description
-* System instructions
-* AI model
-* Tools
-* Knowledge/documents
+* **Agent Cards**:
+  * Name, description, and assigned model badge.
+  * **Trigger Badge**: Indicates execution schedule (`manual`, `schedule: every 1 day at 09:00`, or `onetime: YYYY-MM-DD`).
+  * **Runtime Status Pulse**: Green pulse indicator when an agent is actively executing in a worker thread (`Active`), or neutral badge when `Idle`.
+  * **Assigned Tools**: Visual chips for attached tools (`Database`, `Documents`, `Email`).
+  * **Attached Knowledge**: Indicator of linked vector documents.
+* **Quick Actions**:
+  * **Open**: Navigates to the Agent Console (`/agents/[id]`) for interactive execution and reasoning logs.
+  * **Configure**: Edit system instructions, model, tools, or schedule.
+  * **Delete**: Removes the agent configuration.
+  * **[+ Create Agent]**: Opens the multi-step Agent Builder wizard.
 
-Example:
+---
+
+### 3.2 Agent Builder & Scheduler (`/app/agents/new/page.tsx`)
+
+A multi-section configuration wizard to create production-grade autonomous agents:
 
 ```text
-Create Agent
-
-Name
-[ Maintenance Agent ]
-
-Description
-[ Machine maintenance assistant ]
-
-Instructions
-[ You are an industrial maintenance assistant... ]
-
-Model
-[ Qwen ▼ ]
-
-Tools
-
-☑ Document Search
-☑ File Reader
-☐ Python
-☐ Internal API
-
-Knowledge
-
-[ + Upload Documents ]
-
-              [Create Agent]
+┌────────────────────────────────────────────────────────────────────────┐
+│ Create New Agent                                                       │
+├────────────────────────────────────────────────────────────────────────┤
+│ 1. GENERAL INFORMATION                                                 │
+│    Agent Name: [ Daily Sales Analyst                             ]     │
+│    System Instructions:                                                │
+│    [ Analyze the latest sales data and generate a summary report...  ] │
+├────────────────────────────────────────────────────────────────────────┤
+│ 2. MODEL SELECTION                                                     │
+│    Select GGUF Model: [ TinyLlama 1.1B Chat (Q4_K_M)             ▼ ]   │
+├────────────────────────────────────────────────────────────────────────┤
+│ 3. TRIGGER & SCHEDULING                                                │
+│    ( ) Manual        (•) Schedule         ( ) One-Time                 │
+│    Repeat Every: [ 1 ] [ Day(s) ▼ ]  At: [ 09:00 ]                     │
+├────────────────────────────────────────────────────────────────────────┤
+│ 4. TOOL CAPABILITIES                                                   │
+│    [✓] Database (Query relational tables & SQL analytics)              │
+│    [✓] Documents (Vector retrieval across uploaded knowledge)          │
+│    [ ] Email (Draft and dispatch operational summaries)                │
+├────────────────────────────────────────────────────────────────────────┤
+│ 5. KNOWLEDGE VAULT ATTACHMENT                                          │
+│    [✓] Q3_Sales_Report.pdf (1.0 MB, indexed)                           │
+│    [ ] Maintenance_Manual.pdf (4.2 MB, indexed)                        │
+├────────────────────────────────────────────────────────────────────────┤
+│ 6. ADVANCED EXECUTION CONTROLS                                         │
+│    Max Execution Time: [ 10 ] mins    Max Tool Calls: [ 50 ]           │
+│    Concurrency Limit:  [ 1  ] worker  Retry Attempts: [ 3  ]           │
+├────────────────────────────────────────────────────────────────────────┤
+│                                         [Cancel]  [Create Agent]       │
+└────────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Supported Trigger Engines
+1. **Manual**: Agent runs only when explicitly triggered by an operator via the UI or API.
+2. **Schedule**: Automated periodic execution based on interval count, interval unit (`minute`, `hour`, `day`, `week`), and time of day (`HH:MM`).
+3. **One-Time**: Scheduled for single execution at a future date and time picker.
 
 ---
 
-### 3.3 Agent Workspace
+### 3.3 Agent Console / Workspace (`/app/agents/[id]/page.tsx`)
 
-The workspace allows the user to interact with an agent.
+Interactive execution and reasoning environment:
+
+* **Header Controls**: Shows active model, trigger type, and execution controls (**Run Task**, **Stop Execution**).
+* **Reasoning Console**:
+  * Displays user prompts and agent responses formatted with markdown syntax highlighting.
+  * **Tool Execution Tree**: Step-by-step breakdown of tools invoked during reasoning (e.g. `Database -> Query executed in 14ms`, `Documents -> 3 excerpts retrieved`).
+* **Configuration Tab**: Inline editor to update agent system prompt, trigger schedule, tools, or advanced limits without leaving the console.
+
+---
+
+### 3.4 Knowledge Vault (`/app/documents/page.tsx`)
+
+Manages company documents for local Retrieval-Augmented Generation (RAG):
+
+* **Drag-and-Drop Ingestion**: Supports `.pdf`, `.docx`, `.txt` file uploads.
+* **Vector Indexing Tracker**: Displays document processing status (`pending`, `indexed`, `failed`).
+* **Document Directory**: Table with document filename, MIME type, file size in bytes, upload timestamp, direct file download link, and deletion controls.
+
+---
+
+### 3.5 Model Hub (`/app/models/page.tsx`)
+
+Control center for downloading, uploading, and managing open-weight local `.gguf` models:
 
 ```text
-┌─────────────────────────────────────────────┐
-│ Maintenance Agent                           │
-│ Model: Qwen                                 │
-├─────────────────────────────────────────────┤
-│                                             │
-│ User                                        │
-│ Analyze this machine report.                │
-│                                             │
-│ Agent                                       │
-│ I found three potential issues...           │
-│                                             │
-│ ✓ Document Search                           │
-│ ✓ Maintenance Manual                        │
-│                                             │
-├─────────────────────────────────────────────┤
-│ Ask the agent...                    [Send]  │
-└─────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│ Model Hub                                                              │
+│ [ Downloaded Models (3) ] [ Upload Local Model ] [ Hugging Face Downloader ] │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-The workspace should also show the agent's current activity.
+#### Tab 1: Downloaded Models
+* Displays local `.gguf` models stored in the backend `models/` directory.
+* Details: Friendly Name, Repo Source, File Path, Format (`gguf`), Quantization (`Q4_K_M`, `Q8_0`), File Size, and Status (`ready` / `downloading`).
+* Actions: Delete model (removes weights from disk and database). Direct link to **Manage Runtime** navigation in header banner.
+
+#### Tab 2: Local Device Upload
+* Direct browser-to-backend multipart upload for `.gguf` files with drag-and-drop and real-time progress bar.
+* **Automatic Metadata Extraction**: Model display name, architecture, context length, and quantization are automatically parsed directly from the GGUF binary headers via `GGUFReader` on the backend without requiring manual operator input.
+* Client-side validation: Rejects non-`.gguf` files before network transmission.
+
+#### Tab 3: Hugging Face Downloader
+* Input Hugging Face repository ID (e.g. `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF`) and exact `.gguf` filename.
+* Background download execution: Tracks download progress while keeping the UI responsive.
+
+---
+
+### 3.6 Runtime Status & Diagnostics (`/app/runtime/page.tsx`)
+
+Unified status and health supervision center dedicated exclusively to status checking of the **Agent Runtime** and **Model Runtime**:
 
 ```text
-Agent is working...
-
-✓ Reading document
-✓ Searching knowledge
-● Analyzing data
-○ Generating response
+┌────────────────────────────────────────────────────────────────────────┐
+│ Runtime Status & Diagnostics                                           │
+│ [ Agent Runtime Status ]  [ Model Runtime Status & Diagnostics ]       │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-This helps demonstrate that the system is actually **agentic** rather than simply a chatbot.
+#### Tab 1: Agent Runtime Status
+* **Active Agent Worker Registry**:
+  * Real-time table of all executing agent instances registered in the backend `runtime` database table.
+  * Columns: Agent Name, Model Name, Runtime ID, Worker Thread Name (e.g. `agent-8c59f0f6...`), Started At, and Last Heartbeat timestamp.
+  * Actions: Instant **Terminate Worker** button to safely abort running agent threads.
+* **System Overview & Air-Gapped Metrics**:
+  * Active Agents counter.
+  * Total Agents configured.
+  * Local host loopback binding (`127.0.0.1`).
+  * External network egress meter (locked at `0.0 KB`).
+
+#### Tab 2: Model Runtime Status & Diagnostics
+* **Live Server Status Card**:
+  * Daemon Health: Online / Loading / Offline badge.
+  * Process PID, Port, Endpoint URL (`http://127.0.0.1:8080`), and Uptime.
+  * Server binary path check (`backend/llama.cpp/bin/Release/llama-server.exe`).
+* **Runner Configuration & Controls**:
+  * Model Selector (dropdown of ready GGUF models).
+  * Port (default `8080`), Context Size (`ctx_size`), GPU Offload Layers (`n_gpu_layers`).
+  * One-click **Start Model Server** and **Stop Model Server**.
+* **Live Terminal Logs**:
+  * Terminal view streaming stdout/stderr from `llama-server.exe` with auto-scroll and manual refresh.
+* **Diagnostic Inference Test**:
+  * Direct testing console to verify model responsiveness, returning full model response, tokens usage, and end-to-end roundtrip latency in milliseconds.
+
+> *Note: For backwards compatibility, `/operations` seamlessly routes to the unified `/runtime` console.*
 
 ---
 
-### 3.4 Agent Configuration
+### 3.7 Settings & Governance (`/app/settings/page.tsx`)
 
-Users should be able to modify an existing agent.
+System administration and enterprise configuration:
 
-```text
-Agent Settings
-
-General
-    Name
-    Description
-    Instructions
-
-Model
-    Local Model
-
-Tools
-    Available Tools
-
-Knowledge
-    Uploaded Documents
-
-              [Save Changes]
-```
+* **Company & Operational Parameters**:
+  * **Company Name**: Configures platform branding.
+  * **Max Concurrent Agent Limit**: Sets the maximum number of worker threads allowed to execute concurrently.
+  * **API URL**: Backend gateway address (e.g. `http://localhost:8000/api/v1`).
+  * **Environment**: Mode badge (`development`, `staging`, `production`).
+  * **Default Timeout Seconds**: Global timeout for tool invocations and model calls.
+  * **Maintenance Mode**: Toggle to pause background agent triggers.
+* **Dynamic Custom Attributes**:
+  * Key-value manager to store arbitrary enterprise metadata in the `settings` database table (stored as structured JSON/JSONB).
+* **User Directory & RBAC**:
+  * View registered operators and system administrators.
+  * Form to register new operators with name, email, and password.
 
 ---
 
-### 3.5 Model Screen
+# 4. Frontend API Client Layer (`frontend/lib/api/`)
 
-Display the models available in the local environment.
+The frontend interacts with the backend through modular, strongly typed API modules powered by a configured Axios client (`lib/api/client.ts`).
 
-```text
-Local Models
-
-┌─────────────────────────────────┐
-│ Qwen                            │
-│ Multimodal Model                │
-│ Status: ● Available             │
-└─────────────────────────────────┘
-
-┌─────────────────────────────────┐
-│ Llama                           │
-│ Text Model                      │
-│ Status: ● Available             │
-└─────────────────────────────────┘
-```
-
-The frontend does not run the model itself. It requests model information from the backend.
+### 4.1 Token Lifecycle & Interceptor Pattern
+* **Request Interceptor**: Automatically reads `access_token` from local storage and injects `Authorization: Bearer <access_token>` into every request header.
+* **Response Interceptor**:
+  1. Detects `401 Unauthorized` responses.
+  2. Queues failed requests while attempting token refresh via `POST /api/v1/users/refresh` using the stored `refresh_token`.
+  3. Upon successful refresh, stores the new access and refresh tokens, updates authorization headers, and retries the queued requests.
+  4. If the refresh token is invalid or expired, clears session storage and redirects to `/login`.
 
 ---
 
-## 4. Frontend → Backend Communication
+### 4.2 API Modules Reference
 
-The frontend communicates with the backend through APIs.
-
-```text
-Frontend
-    │
-    │ HTTP / HTTPs
-    ▼
-FastAPI Backend
-```
-
-### 4.1 Authentication & Token Lifecycle
-
-* **Base URL**: `http://localhost:8000/api/v1`
-* **Access Token**: Short-lived JWT (30 mins). Pass in all protected requests as `Authorization: Bearer <access_token>`.
-* **Refresh Token**: Long-lived single-use token (7 days). Stored to obtain new access tokens via `POST /api/v1/users/refresh`.
-* **Token Rotation**: Each call to `/api/v1/users/refresh` invalidates the previous refresh token and returns a new one.
-* **Interceptor Pattern**:
-  1. Frontend HTTP client (e.g. Axios/Fetch wrapper) attaches `Authorization: Bearer <access_token>`.
-  2. If backend responds with `401 Unauthorized`, client attempts `POST /api/v1/users/refresh` with `refresh_token`.
-  3. If refresh succeeds, retry the failed request with the new access token.
-  4. If refresh fails, clear tokens and redirect to `/login`.
+| Module | File | Methods | Description |
+| :--- | :--- | :--- | :--- |
+| `agentsApi` | `lib/api/agents.ts` | `getAgents`, `getAgent`, `createAgent`, `updateAgent`, `deleteAgent`, `runAgent`, `stopAgent`, `getRunningAgents`, `getAgentDocuments` | Full agent lifecycle, interactive execution, and worker supervisor |
+| `modelsApi` | `lib/api/models.ts` | `getModels`, `getModel`, `downloadModel`, `uploadModel`, `deleteModel`, `checkLlamaStatus`, `startRuntime`, `stopRuntime`, `getRuntimeStatus`, `getRuntimeLogs` | GGUF model management, HF download, file upload, and llama.cpp runtime |
+| `documentsApi` | `lib/api/documents.ts` | `getDocuments`, `getDocument`, `uploadDocument`, `downloadDocument`, `deleteDocument` | Knowledge Vault document ingestion, retrieval, and binary downloads |
+| `runtimeApi` | `lib/api/runtime.ts` | `getOverview`, `getModelStatus`, `startModel`, `stopModel`, `getModelLogs`, `testModel`, `getActiveAgents`, `startAgent`, `stopAgent` | Real-time operations overview, model server testing, and worker management |
+| `settingsApi` | `lib/api/settings.ts` | `getSettings`, `updateSettings` | Global system settings, company parameters, and custom JSON key-values |
+| `usersApi` | `lib/api/users.ts` | `getUsers`, `getUser`, `createUser`, `updateUser`, `deleteUser` | User directory and administrative operator provisioning |
+| `authApi` | `lib/api/auth.ts` | `login`, `refresh`, `logout`, `getCurrentUser` | Authentication and session token handling |
 
 ---
 
-### 4.2 Authentication & User Endpoints
+# 5. TypeScript Data Types (`frontend/lib/api/types.ts`)
 
-#### 1. Login (`POST /api/v1/users/login`)
-* **Request JSON**:
-```json
-{
-  "email": "user@example.com",
-  "password": "secretpassword123"
+Key interfaces powering the frontend:
+
+```typescript
+export type AgentTrigger = 'manual' | 'schedule' | 'onetime';
+
+export interface Agent {
+  id: string;
+  owner_id: string;
+  name: string;
+  description?: string | null;
+  instructions: string;
+  model_id: string;
+  model?: string | null;
+  ai_model?: AIModelResponse | null;
+  trigger: AgentTrigger;
+  schedule?: string | null;
+  max_execution_time: number;
+  max_tool_calls: number;
+  concurrency: number;
+  retries: number;
+  is_running: boolean;
+  created_at: string;
+  updated_at: string;
+  tools: ToolResponse[];
+  documents: DocumentResponse[];
 }
-```
-* **Response `200 OK`**:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "4eZpYQhF8s9bT1aW-9mK...",
-  "token_type": "bearer",
-  "expires_in": 1800
+
+export interface ModelRuntimeStatus {
+  running: boolean;
+  ready: boolean;
+  pid?: number | null;
+  model_path?: string | null;
+  model_name?: string | null;
+  host: string;
+  port: number;
+  ctx_size: number;
+  n_gpu_layers: number;
+  threads?: number | null;
+  base_url: string;
+  health_url: string;
+  uptime_seconds?: number | null;
 }
-```
-* **Response `401 Unauthorized`**:
-```json
-{
-  "detail": "Invalid email or password"
+
+export interface ActiveAgentRuntimeItem {
+  id: string;
+  agent_id: string;
+  agent_name: string;
+  agent_model?: string | null;
+  status: string;
+  thread_name?: string | null;
+  started_at: string;
+  last_heartbeat: string;
 }
-```
 
----
-
-#### 2. Refresh Token (`POST /api/v1/users/refresh`)
-* **Request JSON**:
-```json
-{
-  "refresh_token": "4eZpYQhF8s9bT1aW-9mK..."
+export interface RuntimeOverviewResponse {
+  llama_installed: boolean;
+  llama_server_path?: string | null;
+  model_runtime: ModelRuntimeStatus;
+  active_agents_count: number;
+  active_agents: ActiveAgentRuntimeItem[];
 }
-```
-* **Response `200 OK`**:
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "9xLpAQhF2s7bT5vK-1mR...",
-  "token_type": "bearer",
-  "expires_in": 1800
-}
-```
 
----
-
-#### 3. Logout (`POST /api/v1/users/logout`)
-* **Request JSON**:
-```json
-{
-  "refresh_token": "9xLpAQhF2s7bT5vK-1mR..."
-}
-```
-* **Response `204 No Content`**
-
----
-
-#### 4. Get Current User (`GET /api/v1/users/me`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Response `200 OK`**:
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "created_at": "2026-09-03T14:20:00Z"
-}
-```
-
----
-
-#### 5. Register User (`POST /api/v1/users/`)
-* **Request JSON**:
-```json
-{
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "password": "securepassword123"
-}
-```
-* **Response `201 Created`**:
-```json
-{
-  "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Jane Doe",
-  "email": "jane@example.com",
-  "created_at": "2026-09-03T14:20:00Z"
+export interface SettingsData {
+  company_name: string;
+  max_concurrent_agent_limit: number;
+  api_url: string;
+  environment: string;
+  default_timeout_seconds: number;
+  maintenance_mode: boolean;
+  extra_values?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 ```
 
 ---
 
-### 4.3 Agent Management Endpoints
+# 6. Technology Stack & Running Locally
 
-#### 1. Get Agent List (`GET /api/v1/agents/`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Query Parameters**: `skip=0`, `limit=100`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-    "owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "name": "Maintenance Agent",
-    "description": "Industrial maintenance assistant",
-    "instructions": "Help analyze machine maintenance problems.",
-    "model": "qwen",
-    "created_at": "2026-09-03T14:30:00Z",
-    "updated_at": "2026-09-03T14:30:00Z",
-    "tools": [
-      {
-        "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2aa",
-        "name": "document_search",
-        "description": "Searches embedded company documents",
-        "handler": "default_document_search"
-      }
-    ],
-    "documents": []
-  }
-]
+### Technology Stack
+* **Framework**: Next.js 15+ (App Router)
+* **Language**: TypeScript 5.0+
+* **Styling**: Tailwind CSS
+* **Icons**: Lucide React
+* **HTTP Client**: Axios (with custom JWT interceptors)
+* **State Management**: React Context (`AuthProvider`, `ToastProvider`)
+
+### Running Locally
+```powershell
+cd frontend
+npm install
+npm run dev
 ```
-
----
-
-#### 2. Create Agent (`POST /api/v1/agents/`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Request JSON**:
-```json
-{
-  "name": "Maintenance Agent",
-  "description": "Industrial maintenance assistant",
-  "instructions": "Help analyze machine maintenance problems.",
-  "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "tools": ["document_search", "file_reader"],
-  "document_ids": ["1fa85f64-5717-4562-b3fc-2c963f66afa1"]
-}
-```
-*(Note: `ai_model_id` is accepted as an alias for `model_id`; `system_instructions` is accepted as an alias for `instructions`)*
-* **Response `201 Created`**:
-```json
-{
-  "id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-  "owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Maintenance Agent",
-  "description": "Industrial maintenance assistant",
-  "instructions": "Help analyze machine maintenance problems.",
-  "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "model": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "ai_model": {
-    "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-    "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-    "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-    "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "format": "gguf",
-    "status": "ready"
-  },
-  "created_at": "2026-09-03T14:30:00Z",
-  "updated_at": "2026-09-03T14:30:00Z",
-  "tools": [
-    {
-      "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2aa",
-      "name": "document_search",
-      "description": "Tool for document_search",
-      "handler": "default_document_search"
-    },
-    {
-      "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2bb",
-      "name": "file_reader",
-      "description": "Tool for file_reader",
-      "handler": "default_file_reader"
-    }
-  ],
-  "documents": [
-    {
-      "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-      "name": "machine_manual.pdf",
-      "file_path": "uploads/machine_manual.pdf",
-      "mime_type": "application/pdf",
-      "created_at": "2026-09-03T14:25:00Z"
-    }
-  ]
-}
-```
-
----
-
-#### 3. Get Agent Details (`GET /api/v1/agents/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Response `200 OK`**: Returns single agent object with `model_id` and nested `ai_model` details.
-
----
-
-#### 4. Update Agent (`PUT /api/v1/agents/{id}` or `PATCH /api/v1/agents/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Request JSON**:
-```json
-{
-  "name": "Maintenance Agent v2",
-  "description": "Updated maintenance assistant",
-  "instructions": "Diagnose machine anomalies and suggest repair procedures.",
-  "model_id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "tools": ["document_search", "python_calculator"],
-  "document_ids": ["1fa85f64-5717-4562-b3fc-2c963f66afa1"]
-}
-```
-* **Response `200 OK`**:
-```json
-{
-  "id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-  "owner_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "name": "Maintenance Agent v2",
-  "description": "Updated maintenance assistant",
-  "instructions": "Diagnose machine anomalies and suggest repair procedures.",
-  "model": "llama",
-  "created_at": "2026-09-03T14:30:00Z",
-  "updated_at": "2026-09-03T14:40:00Z",
-  "tools": [
-    {
-      "id": "7b59f0f6-d703-4b68-b808-fa2fa1a6a2aa",
-      "name": "document_search",
-      "description": "Tool for document_search",
-      "handler": "default_document_search"
-    }
-  ],
-  "documents": [],
-  "updated_at": "2026-09-03T14:40:00Z"
-}
-```
-
----
-
-#### 5. Delete Agent (`DELETE /api/v1/agents/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Response `204 No Content`**
-
----
-
-#### 6. Run Agent Chat / Execution (`POST /api/v1/agents/{id}/run`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Request JSON**:
-```json
-{
-  "prompt": "Analyze vibration sensor readings in Section B and check against the manual.",
-  "conversation_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
-}
-```
-* **Response `200 OK`**:
-```json
-{
-  "execution_id": "e4eaaaf2-d142-11e1-b3e4-080027620cdd",
-  "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-  "status": "completed",
-  "response": "Agent 'Maintenance Agent' completed execution for prompt: Analyze vibration sensor readings in Section B and check against the manual.",
-  "tool_calls": [],
-  "completed_at": "2026-09-03T14:45:10Z"
-}
-```
-
----
-
-#### 7. Stop Agent Execution (`POST /api/v1/agents/{id}/stop`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Request JSON** *(Optional)*:
-```json
-{
-  "execution_id": "e4eaaaf2-d142-11e1-b3e4-080027620cdd"
-}
-```
-* **Response `200 OK`**:
-```json
-{
-  "execution_id": "e4eaaaf2-d142-11e1-b3e4-080027620cdd",
-  "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-  "status": "stopped",
-  "message": "Execution for agent 'Maintenance Agent' stopped successfully",
-  "stopped_at": "2026-09-03T14:46:00Z"
-}
-```
-
----
-
-#### 8. List Running Agents (`GET /api/v1/agents/running`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Query Parameters**: `auto_restart_only=false`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "2da85f64-5717-4562-b3fc-2c963f66afa3",
-    "agent_id": "8c59f0f6-d703-4b68-b808-fa2fa1a6a2ef",
-    "status": "running",
-    "auto_restart": true,
-    "started_at": "2026-09-03T14:45:10Z",
-    "last_heartbeat": "2026-09-03T14:55:00Z",
-    "configuration": "{\"prompt\": \"Monitor production line\"}"
-  }
-]
-```
-
----
-
-#### 9. Get Agent Documents (`GET /api/v1/agents/{id}/documents`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-    "name": "machine_manual.pdf",
-    "file_path": "uploads/machine_manual.pdf",
-    "mime_type": "application/pdf",
-    "created_at": "2026-09-03T14:50:00Z"
-  }
-]
-```
-
----
-
-### 4.4 Models & Knowledge Endpoints
-
-#### 1. Download GGUF Model from Hugging Face (`POST /api/v1/models/download`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Query Parameters**: `background=true` (optional)
-* **Constraints**: **Only `.gguf` model files are supported**. Any other extension results in `422/400 Bad Request`.
-* **Request JSON**:
-```json
-{
-  "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-  "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "quantization": "Q4_K_M"
-}
-```
-* **Response `202 Accepted`**:
-```json
-{
-  "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-  "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-  "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-  "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-  "format": "gguf",
-  "size_bytes": 669229056,
-  "quantization": "Q4_K_M",
-  "status": "ready",
-  "error_message": null,
-  "created_at": "2026-09-03T15:00:00Z",
-  "updated_at": "2026-09-03T15:02:10Z"
-}
-```
-
----
-
-#### 2. List Downloaded Models (`GET /api/v1/models/`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Query Parameters**: `skip=0`, `limit=100`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "594d7346-a772-4dc5-bfb3-f43a805d12ba",
-    "name": "TinyLlama 1.1B Chat (Q4_K_M)",
-    "repo_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
-    "filename": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "file_path": "models/TheBloke--TinyLlama-1.1B-Chat-v1.0-GGUF/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
-    "format": "gguf",
-    "size_bytes": 669229056,
-    "quantization": "Q4_K_M",
-    "status": "ready",
-    "error_message": null,
-    "created_at": "2026-09-03T15:00:00Z",
-    "updated_at": "2026-09-03T15:02:10Z"
-  }
-]
-```
-
----
-
-#### 3. Get Model Details (`GET /api/v1/models/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**: Single model object
-
----
-
-#### 4. Delete Model (`DELETE /api/v1/models/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Path Parameters**: `id` (UUID)
-* **Response `204 No Content`**
-
----
-
-#### 2. Upload Document (`POST /api/v1/documents/`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Content-Type**: `multipart/form-data`
-* **Form Field**: `file` (binary PDF, DOCX, TXT)
-* **Response `201 Created`**:
-```json
-{
-  "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-  "name": "machine_manual.pdf",
-  "filename": "machine_manual.pdf",
-  "file_path": "uploads/a1b2c3d4_machine_manual.pdf",
-  "mime_type": "application/pdf",
-  "size_bytes": 1048576,
-  "status": "indexed",
-  "created_at": "2026-09-03T14:50:00Z"
-}
-```
-
----
-
-#### 3. List Documents (`GET /api/v1/documents/`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Query Parameters**: `skip=0`, `limit=100`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-    "name": "machine_manual.pdf",
-    "filename": "machine_manual.pdf",
-    "file_path": "uploads/a1b2c3d4_machine_manual.pdf",
-    "mime_type": "application/pdf",
-    "size_bytes": 1048576,
-    "status": "indexed",
-    "created_at": "2026-09-03T14:50:00Z"
-  }
-]
-```
-
----
-
-#### 4. Get Document Details (`GET /api/v1/documents/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**:
-```json
-{
-  "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-  "name": "machine_manual.pdf",
-  "filename": "machine_manual.pdf",
-  "file_path": "uploads/a1b2c3d4_machine_manual.pdf",
-  "mime_type": "application/pdf",
-  "size_bytes": 1048576,
-  "status": "indexed",
-  "created_at": "2026-09-03T14:50:00Z"
-}
-```
-
----
-
-#### 5. Download Document (`GET /api/v1/documents/{id}/download`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Path Parameters**: `id` (UUID)
-* **Response `200 OK`**: Raw binary file download
-
----
-
-#### 6. Delete Document (`DELETE /api/v1/documents/{id}`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Path Parameters**: `id` (UUID)
-* **Response `204 No Content`**
-
----
-
-#### 7. Get Documents for Agent (`GET /api/v1/agents/{id}/documents`)
-* **Headers**: `Authorization: Bearer <access_token>`
-* **Response `200 OK`**:
-```json
-[
-  {
-    "id": "1fa85f64-5717-4562-b3fc-2c963f66afa1",
-    "name": "machine_manual.pdf",
-    "file_path": "uploads/machine_manual.pdf",
-    "mime_type": "application/pdf",
-    "created_at": "2026-09-03T14:50:00Z"
-  }
-]
-```
-
----
-
-### 4.5 Real-Time Execution Streaming (Future Extension)
-
-For agent execution, WebSocket or Server-Sent Events (SSE) can later be used to stream:
-
-```text
-Thinking
-Tool execution
-Tool result
-Final response
-```
-
----
-
-## 5. Recommended Frontend Technology
-
-For the MVP:
-
-```text
-Frontend
-│
-├── React
-├── TypeScript
-├── Vite / Next.js
-└── Tailwind CSS
-```
-
-The frontend should remain independent from the AI model.
-
-Its responsibility is primarily:
-
-```text
-User Interface
-      ↓
-Agent Configuration
-      ↓
-API Requests
-      ↓
-Display Results
-```
-
----
-
-## 6. MVP Priority
-
-Focus on these features first:
-
-1. Agent List
-2. Create Agent
-3. Configure Agent
-4. Select Local Model
-5. Upload Documents
-6. Agent Chat / Execution
-7. Agent Edit/Delete
-
-Avoid implementing advanced dashboards, marketplaces, complex workflow builders, and large numbers of integrations until the core workflow works.
-
----
-
-# Core Frontend Workflow
-
-```text
-Create Agent
-      ↓
-Configure Agent
-      ↓
-Select Local Model
-      ↓
-Add Tools
-      ↓
-Upload Knowledge
-      ↓
-Save Agent
-      ↓
-Run Agent
-      ↓
-View Execution
-      ↓
-Receive Result
-```
+The application opens by default at `http://localhost:3000`.

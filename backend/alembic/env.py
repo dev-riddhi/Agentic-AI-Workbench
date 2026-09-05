@@ -22,12 +22,12 @@ from database.models.base import Base
 
 from database.models.agent import Agent
 from database.models.user import User
-from database.models.tool import Tool
+from database.models.agent_tools import AgentTool, agent_tools
 from database.models.document import Document
 from database.models.conversation import Conversation
 from database.models.refresh_token import RefreshToken
 from database.models.ai_model import AIModel
-from database.models.agent_tools import agent_tools
+# from database.models.agent_tools import agent_tools
 from database.models.agent_documents import agent_documents
 from database.models.setting import Setting
 from database.models.runtime import Runtime
