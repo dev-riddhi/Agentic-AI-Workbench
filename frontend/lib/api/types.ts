@@ -27,6 +27,8 @@ export interface DocumentResponse {
   mime_type?: string | null;
   size_bytes: number;
   status: string;
+  chunk_count?: number;
+  file_type?: string;
   created_at: string;
 }
 
@@ -39,6 +41,7 @@ export interface AIModelResponse {
   format: string;
   size_bytes: number;
   quantization?: string | null;
+  context_window?: number;
   status: string;
   error_message?: string | null;
   created_at: string;

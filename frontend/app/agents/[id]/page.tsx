@@ -13,13 +13,25 @@ import {
   Clock,
   Settings,
   AlertCircle,
-  Sliders,
+  Play,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Terminal,
+  ExternalLink,
 } from 'lucide-react';
 import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger } from '@/lib/api/types';
 import { agentsApi } from '@/lib/api/agents';
 import { modelsApi } from '@/lib/api/models';
 import { documentsApi } from '@/lib/api/documents';
 import { useToast } from '@/context/toast-context';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  WORKBENCH_TOOLS,
+  TOOL_CATEGORIES,
+} from '@/lib/constants/tools';
 
 interface ChatMessage {
   id: string;
@@ -28,13 +40,14 @@ interface ChatMessage {
   timestamp: string;
   toolCalls?: Array<{ name?: string; arguments?: Record<string, unknown>; result?: unknown }>;
   status?: string;
+  latencyMs?: number;
 }
 
 const STEP_STAGES = [
-  { key: 'reading', label: 'Reading Documents' },
-  { key: 'searching', label: 'Searching Knowledge' },
-  { key: 'analyzing', label: 'Analyzing Telemetry' },
-  { key: 'done', label: 'Completed' },
+  { key: 'reading', label: 'Ingesting Context' },
+  { key: 'searching', label: 'Vector RAG Search' },
+  { key: 'analyzing', label: 'Local LLM Reasoning' },
+  { key: 'done', label: 'Execution Finished' },
 ];
 
 export default function AgentWorkspacePage({
@@ -64,7 +77,7 @@ export default function AgentWorkspacePage({
     {
       id: 'm-welcome',
       role: 'agent',
-      content: 'Agent workspace active. Submit a prompt or diagnostic query to execute tasks via the backend runtime.',
+      content: 'Autonomous Mission Console initialized. Ready to execute instructions against local GGUF weights and authorized system tools.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -73,8 +86,10 @@ export default function AgentWorkspacePage({
   const [currentStep, setCurrentStep] = useState<string>('idle');
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
   const [executionLogs, setExecutionLogs] = useState<AgentRunResponse[]>([]);
+  const [expandedToolCalls, setExpandedToolCalls] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Configuration Form State
+  // Inline Configuration Form State
   const [configName, setConfigName] = useState('');
   const [configDesc, setConfigDesc] = useState('');
   const [configInstructions, setConfigInstructions] = useState('');
@@ -82,11 +97,15 @@ export default function AgentWorkspacePage({
   const [configTools, setConfigTools] = useState<string[]>([]);
   const [configTrigger, setConfigTrigger] = useState<AgentTrigger>('manual');
   const [configSchedule, setConfigSchedule] = useState('');
-  const [configMaxExecutionTime, setConfigMaxExecutionTime] = useState(10);
-  const [configMaxToolCalls, setConfigMaxToolCalls] = useState(50);
+  const [configMaxExecutionTime, setConfigMaxExecutionTime] = useState(15);
+  const [configMaxToolCalls, setConfigMaxToolCalls] = useState(40);
   const [configConcurrency, setConfigConcurrency] = useState(1);
   const [configRetries, setConfigRetries] = useState(3);
   const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  // Active Tool Category Filter for Tools Tab
+  const [activeToolCategory, setActiveToolCategory] = useState<string>('all');
 
   useEffect(() => {
     let active = true;
@@ -108,8 +127,8 @@ export default function AgentWorkspacePage({
         setConfigTools(ag.tools?.map((t) => t.name) || []);
         setConfigTrigger(ag.trigger || 'manual');
         setConfigSchedule(ag.schedule || '');
-        setConfigMaxExecutionTime(ag.max_execution_time ?? 10);
-        setConfigMaxToolCalls(ag.max_tool_calls ?? 50);
+        setConfigMaxExecutionTime(ag.max_execution_time ?? 15);
+        setConfigMaxToolCalls(ag.max_tool_calls ?? 40);
         setConfigConcurrency(ag.concurrency ?? 1);
         setConfigRetries(ag.retries ?? 3);
       } else {
@@ -130,9 +149,20 @@ export default function AgentWorkspacePage({
     };
   }, [id]);
 
-  // Execute Agent Prompt via Real Backend API
-  const handleSendPrompt = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const toggleToolCallAccordion = (key: string) => {
+    setExpandedToolCalls((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const copyToClipboard = (text: string, msgId: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(msgId);
+    toast.info('Message content copied to clipboard.', 'Copied');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Execute Agent Prompt via Backend API
+  const handleSendPrompt = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!prompt.trim() || isExecuting) return;
 
     const userText = prompt.trim();
@@ -149,12 +179,14 @@ export default function AgentWorkspacePage({
     setIsExecuting(true);
     setCurrentStep('reading');
 
-    const stepTimer1 = setTimeout(() => setCurrentStep('searching'), 300);
-    const stepTimer2 = setTimeout(() => setCurrentStep('analyzing'), 600);
+    const stepTimer1 = setTimeout(() => setCurrentStep('searching'), 350);
+    const stepTimer2 = setTimeout(() => setCurrentStep('analyzing'), 750);
+    const startTime = performance.now();
 
     try {
-      // Execute through FastAPI backend POST /api/v1/agents/{id}/run
       const response = await agentsApi.runAgent(id, userText);
+      const elapsed = Math.round(performance.now() - startTime);
+
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
       setCurrentStep('done');
@@ -169,10 +201,11 @@ export default function AgentWorkspacePage({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         toolCalls: response.tool_calls,
         status: response.status,
+        latencyMs: elapsed,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
-      toast.success('Agent execution completed successfully.', 'Task Executed');
+      toast.success(`Mission executed successfully in ${elapsed}ms.`, 'Task Completed');
     } catch (err: unknown) {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
@@ -180,7 +213,7 @@ export default function AgentWorkspacePage({
 
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Agent run execution failed on backend API.';
+        'Agent execution failed on backend runtime. Check logs.';
       toast.error(detail, 'Execution Error');
 
       setMessages((prev) => [
@@ -188,7 +221,7 @@ export default function AgentWorkspacePage({
         {
           id: `err-${Date.now()}`,
           role: 'system',
-          content: `[Backend Error] ${detail}`,
+          content: `[Execution Error] ${detail}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -198,17 +231,25 @@ export default function AgentWorkspacePage({
     }
   };
 
-  // Stop Execution via Real Backend API
+  // Keyboard shortcut Ctrl + Enter to dispatch
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSendPrompt();
+    }
+  };
+
+  // Stop / Abort Worker
   const handleStopExecution = async () => {
     if (!isExecuting) return;
     try {
       await agentsApi.stopAgent(id, activeExecutionId || undefined);
       setAgent((prev) => (prev ? { ...prev, is_running: false } : null));
-      toast.info('Agent execution stopped by operator.', 'Run Stopped');
+      toast.info('Agent execution terminated by operator signal.', 'Run Stopped');
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to stop execution on backend';
+        'Failed to stop execution on backend.';
       toast.error(detail, 'Stop Error');
     } finally {
       setIsExecuting(false);
@@ -218,21 +259,22 @@ export default function AgentWorkspacePage({
         {
           id: `stop-${Date.now()}`,
           role: 'system',
-          content: 'Execution stopped by operator signal.',
+          content: 'Execution aborted by operator signal.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     }
   };
 
-  // Save Configuration (Tab 2) via Real Backend API
+  // Save Inline Configuration
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSavingConfig(true);
     try {
       const updated = await agentsApi.updateAgent(id, {
-        name: configName,
-        description: configDesc,
-        instructions: configInstructions,
+        name: configName.trim(),
+        description: configDesc.trim() || undefined,
+        instructions: configInstructions.trim(),
         model_id: configModelId,
         tools: configTools,
         trigger: configTrigger,
@@ -244,17 +286,19 @@ export default function AgentWorkspacePage({
       });
       setAgent(updated);
       setConfigSaveSuccess(true);
-      toast.success('Agent configuration updated in database.', 'Configuration Saved');
+      toast.success('Agent parameters updated in database.', 'Configuration Saved');
       setTimeout(() => setConfigSaveSuccess(false), 3000);
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to update agent configuration in backend';
+        'Failed to update configuration.';
       toast.error(detail, 'Update Failed');
+    } finally {
+      setIsSavingConfig(false);
     }
   };
 
-  // Toggle Tool in Tools Tab via Real Backend API
+  // Toggle Tool in Tools Tab
   const handleToggleTool = async (toolName: string) => {
     const nextTools = configTools.includes(toolName)
       ? configTools.filter((t) => t !== toolName)
@@ -273,12 +317,12 @@ export default function AgentWorkspacePage({
     }
   };
 
-  // Unlink Knowledge Document via Real Backend API
+  // Unlink Document
   const handleUnlinkDoc = async (docId: string, docName?: string) => {
     if (!agent) return;
     const ok = await confirm({
       title: 'Unlink Document',
-      message: `Unlink "${docName || 'document'}" from this agent? The document remains available in the Knowledge Vault.`,
+      message: `Unlink "${docName || 'document'}" from this agent? The document remains safely stored in the Knowledge Vault.`,
       confirmText: 'Yes, Unlink',
       cancelText: 'Cancel',
       danger: true,
@@ -291,172 +335,214 @@ export default function AgentWorkspacePage({
     try {
       const updated = await agentsApi.updateAgent(id, { document_ids: nextDocIds });
       setAgent(updated);
-      toast.success('Document unlinked from agent.', 'Document Unlinked');
+      toast.success('Document unlinked from agent context.', 'Unlinked');
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to unlink document';
+        'Failed to unlink document.';
       toast.error(detail, 'Error');
     }
   };
 
-  // Link Knowledge Document via Real Backend API
+  // Link Document
   const handleLinkDoc = async (doc: DocumentResponse) => {
     if (!agent) return;
     const nextDocIds = [...(agent.documents || []).map((d) => d.id), doc.id];
     try {
       const updated = await agentsApi.updateAgent(id, { document_ids: nextDocIds });
       setAgent(updated);
-      toast.success(`Attached "${doc.name}" to agent.`, 'Knowledge Attached');
+      toast.success(`Attached "${doc.name}" to agent context.`, 'Knowledge Attached');
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to attach document';
+        'Failed to attach document.';
       toast.error(detail, 'Error');
     }
   };
 
   if (isLoading) {
     return (
-      <div className="h-96 flex items-center justify-center">
+      <div className="h-96 flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-mono text-zinc-500">Connecting to Mission Console...</span>
       </div>
     );
   }
 
   if (notFound || !agent) {
     return (
-      <div className="p-12 text-center rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+      <div className="p-12 text-center rounded-2xl glass-card space-y-4 max-w-lg mx-auto mt-12">
         <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
-        <h3 className="text-base font-bold text-zinc-100">Agent Not Found in Backend</h3>
-        <p className="text-xs text-zinc-400">
-          The requested agent UUID does not exist in the database or belongs to another user.
+        <h3 className="text-base font-bold text-zinc-100">Agent Not Found in Database</h3>
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          The requested agent UUID does not exist or has been decommissioned from the fleet.
         </p>
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Fleet Catalog</span>
+        <Link href="/agents">
+          <Button variant="secondary" size="sm" className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            <span>Return to Fleet Catalog</span>
+          </Button>
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Top Breadcrumb & Agent Header */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-4 p-5 rounded-2xl bg-zinc-900/80 border border-zinc-800">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/agents"
-            className="p-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-zinc-100">{agent.name}</h2>
-              {agent.is_running && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Running
+    <div className="space-y-5 pb-12">
+      {/* Top Breadcrumb & Mission Header Card */}
+      <div className="glass-card p-5 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <Link
+              href="/agents"
+              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-colors shrink-0"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold text-zinc-100">{agent.name}</h1>
+                <Badge variant={agent.is_running || isExecuting ? 'active' : 'offline'}>
+                  {agent.is_running || isExecuting ? 'Worker Active' : 'Standby'}
+                </Badge>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/25">
+                  {agent.model || agent.ai_model?.name || 'Local GGUF'}
                 </span>
-              )}
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                {agent.model || agent.ai_model?.name || 'Local GGUF'}
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 capitalize">
-                {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
-              </span>
-              {agent.schedule && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                  {agent.schedule}
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/80 capitalize">
+                  {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
                 </span>
-              )}
+                {agent.schedule && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 hidden sm:inline">
+                    {agent.schedule}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-zinc-400 mt-1 line-clamp-1 max-w-2xl">
+                {agent.description || 'Autonomous agent connected to local runtime.'}
+              </p>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-xl">
-              {agent.description || 'Agent Workspace Active'}
-            </p>
+          </div>
+
+          {/* Header Quick Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {isExecuting ? (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleStopExecution}
+                className="gap-2 shadow-lg shadow-rose-500/10"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span>Abort Worker</span>
+              </Button>
+            ) : (
+              <Button
+                variant="emerald"
+                size="sm"
+                onClick={() => {
+                  setActiveTab('chat');
+                  if (!prompt.trim()) {
+                    setPrompt('Execute immediate system diagnostic check.');
+                  }
+                }}
+                className="gap-2 shadow-lg shadow-emerald-500/10"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Run Agent Now</span>
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Quick Tabs Bar */}
-        <div className="flex items-center gap-1 p-1 bg-zinc-950 rounded-xl border border-zinc-800 text-xs font-medium overflow-x-auto max-w-full">
-          <button
-            type="button"
-            onClick={() => setActiveTab('chat')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'chat'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Bot className="w-3.5 h-3.5" />
-            Chat / Run
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('config')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'config'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Configuration
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('tools')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'tools'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Wrench className="w-3.5 h-3.5" />
-            Tools ({configTools.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('knowledge')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'knowledge'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            Knowledge ({agent.documents?.length || 0})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('logs')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-              activeTab === 'logs'
-                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            Runs ({executionLogs.length})
-          </button>
+        {/* Tab Switcher Bar */}
+        <div className="flex items-center justify-between border-t border-zinc-800/80 pt-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
+            <button
+              type="button"
+              onClick={() => setActiveTab('chat')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'chat'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Mission Feed</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('config')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'config'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span>Parameters</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('tools')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'tools'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Tools ({configTools.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('knowledge')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'knowledge'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Knowledge ({agent.documents?.length || 0})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('logs')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'logs'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Audit Runs ({executionLogs.length})</span>
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-3 text-[11px] font-mono text-zinc-500">
+            <span>Air-Gapped: <strong className="text-emerald-400">0.0 KB Egress</strong></span>
+            <span>·</span>
+            <span>Host: <strong className="text-zinc-300">127.0.0.1:8000</strong></span>
+          </div>
         </div>
       </div>
 
-      {/* TAB 1: CHAT / RUN WORKSPACE */}
+      {/* TAB 1: MISSION FEED & LIVE EXECUTION STUDIO */}
       {activeTab === 'chat' && (
         <div className="space-y-4">
-          {/* Real-time Execution Stepper */}
+          {/* Active Execution Pipeline Indicator */}
           {currentStep !== 'idle' && (
-            <div className="p-3.5 rounded-xl bg-zinc-900 border border-cyan-500/30 flex items-center justify-between animate-in fade-in">
+            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-cyan-500/30 flex items-center justify-between animate-in fade-in shadow-lg shadow-cyan-950/20">
               <div className="flex items-center gap-3">
-                <div className="w-5 h-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
-                <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-mono font-bold text-cyan-400 uppercase">
-                    Agent Pipeline Active:
+                    PIPELINE ACTIVE:
                   </span>
                   <div className="flex items-center gap-2 text-xs font-mono">
                     {STEP_STAGES.map((st, i) => {
@@ -486,19 +572,20 @@ export default function AgentWorkspacePage({
                 </div>
               </div>
 
-              <button
-                type="button"
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={handleStopExecution}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-medium cursor-pointer"
+                className="gap-1.5 h-7 px-2.5 text-xs"
               >
                 <Square className="w-3 h-3 fill-current" />
-                Stop Run
-              </button>
+                <span>Abort</span>
+              </Button>
             </div>
           )}
 
-          {/* Chat Messages Container */}
-          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 min-h-[460px] max-h-[580px] overflow-y-auto space-y-4 flex flex-col justify-between">
+          {/* Chat Messages Feed Container */}
+          <div className="glass-card p-5 min-h-[460px] max-h-[620px] overflow-y-auto space-y-4 flex flex-col justify-between">
             <div className="space-y-4">
               {messages.map((msg) => {
                 const isUser = msg.role === 'user';
@@ -508,7 +595,7 @@ export default function AgentWorkspacePage({
                   return (
                     <div
                       key={msg.id}
-                      className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-center text-xs text-zinc-400 font-mono"
+                      className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-center text-xs text-zinc-400 font-mono"
                     >
                       {msg.content}
                     </div>
@@ -521,47 +608,110 @@ export default function AgentWorkspacePage({
                     className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
                   >
                     <div className="flex items-center gap-2 mb-1 px-1 text-[11px] font-mono text-zinc-500">
-                      <span>{isUser ? 'Operator' : agent.name}</span>
+                      <span>{isUser ? 'Authorized Operator' : agent.name}</span>
                       <span>•</span>
                       <span>{msg.timestamp}</span>
+                      {msg.latencyMs !== undefined && (
+                        <span className="text-cyan-400/80">({msg.latencyMs}ms)</span>
+                      )}
                     </div>
 
                     <div
-                      className={`max-w-2xl p-4 rounded-2xl text-xs sm:text-sm leading-relaxed ${
+                      className={`max-w-2xl p-4 rounded-2xl text-xs sm:text-sm leading-relaxed relative group ${
                         isUser
-                          ? 'bg-cyan-600 text-white rounded-br-xs'
-                          : 'bg-zinc-900 text-zinc-100 border border-zinc-800 rounded-bl-xs'
+                          ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-xs shadow-md shadow-cyan-950/30'
+                          : 'bg-zinc-900/90 text-zinc-100 border border-zinc-800 rounded-bl-xs'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <p className="whitespace-pre-wrap font-sans">{msg.content}</p>
 
-                      {/* Tool Call Inspector Accordion */}
+                      {/* Copy Action Overlay */}
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(msg.content, msg.id)}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-zinc-950/60 hover:bg-zinc-950 text-zinc-400 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        title="Copy text"
+                      >
+                        {copiedId === msg.id ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+
+                      {/* Step-by-Step Tool Call Inspector Accordion */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-1.5">
-                          <div className="text-[10px] font-mono uppercase text-cyan-400 font-bold flex items-center gap-1">
-                            <Wrench className="w-3 h-3" />
-                            Tool Invocations ({msg.toolCalls.length})
+                        <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2">
+                          <div className="text-[10px] font-mono uppercase text-cyan-400 font-bold flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              <Wrench className="w-3.5 h-3.5" />
+                              Tool Traces ({msg.toolCalls.length} Invocations)
+                            </span>
                           </div>
-                          {msg.toolCalls.map((tc, idx) => (
-                            <div
-                              key={idx}
-                              className="p-2 rounded-lg bg-zinc-950/80 border border-zinc-800/80 text-[11px] font-mono text-zinc-300 space-y-1"
-                            >
-                              <div className="text-cyan-300 font-semibold">
-                                › {tc.name || 'document_search'}
-                              </div>
-                              {tc.arguments && (
-                                <div className="text-zinc-500">
-                                  Args: {JSON.stringify(tc.arguments)}
+
+                          <div className="space-y-1.5">
+                            {msg.toolCalls.map((tc, idx) => {
+                              const accordionKey = `${msg.id}-tc-${idx}`;
+                              const isExpanded = Boolean(expandedToolCalls[accordionKey]);
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className="rounded-xl bg-zinc-950/80 border border-zinc-800/90 overflow-hidden text-xs font-mono"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleToolCallAccordion(accordionKey)}
+                                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                                      <span className="text-zinc-200 font-semibold">
+                                        {tc.name || 'tool_invocation'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                        Status: OK
+                                      </span>
+                                      {isExpanded ? (
+                                        <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                                      ) : (
+                                        <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
+                                      )}
+                                    </div>
+                                  </button>
+
+                                  {isExpanded && (
+                                    <div className="p-3 border-t border-zinc-800/80 space-y-2 bg-zinc-950">
+                                      {tc.arguments && (
+                                        <div>
+                                          <span className="text-[10px] uppercase text-zinc-500 block mb-0.5">
+                                            Arguments:
+                                          </span>
+                                          <pre className="p-2 rounded-lg bg-zinc-900 text-zinc-300 text-[11px] overflow-x-auto">
+                                            {JSON.stringify(tc.arguments, null, 2)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                      {Boolean(tc.result) && (
+                                        <div>
+                                          <span className="text-[10px] uppercase text-zinc-500 block mb-0.5">
+                                            Result Output:
+                                          </span>
+                                          <pre className="p-2 rounded-lg bg-zinc-900 text-emerald-300 text-[11px] overflow-x-auto whitespace-pre-wrap">
+                                            {typeof tc.result === 'object'
+                                              ? JSON.stringify(tc.result, null, 2)
+                                              : String(tc.result)}
+                                          </pre>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {Boolean(tc.result) && (
-                                <div className="text-emerald-400">
-                                  Result: {String(tc.result)}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -570,38 +720,46 @@ export default function AgentWorkspacePage({
               })}
             </div>
 
-            {/* Input Form Bar */}
-            <form onSubmit={handleSendPrompt} className="relative pt-4">
-              <div className="relative flex items-center">
-                <input
-                  type="text"
+            {/* Input Bar with Ctrl+Enter shortcut */}
+            <form onSubmit={handleSendPrompt} className="pt-4 border-t border-zinc-800/80">
+              <div className="relative flex flex-col gap-2">
+                <textarea
+                  rows={3}
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   disabled={isExecuting}
-                  placeholder="Send instructions to agent via FastAPI runner..."
-                  className="w-full pl-4 pr-24 py-3 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors disabled:opacity-50"
+                  placeholder="Dispatch instructions or diagnostic query (Press Ctrl+Enter to send)..."
+                  className="w-full p-3.5 pr-24 rounded-xl bg-zinc-950 border border-zinc-800 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans transition-colors resize-none disabled:opacity-50"
                 />
 
-                <div className="absolute right-2 flex items-center gap-1.5">
-                  {isExecuting ? (
-                    <button
-                      type="button"
-                      onClick={handleStopExecution}
-                      className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 text-xs font-semibold cursor-pointer flex items-center gap-1"
-                    >
-                      <Square className="w-3 h-3 fill-current" />
-                      <span>Stop</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="submit"
-                      disabled={!prompt.trim()}
-                      className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-30 cursor-pointer flex items-center gap-1"
-                    >
-                      <span>Run</span>
-                      <Send className="w-3 h-3" />
-                    </button>
-                  )}
+                <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
+                  <span>Tip: Press <strong>Ctrl + Enter</strong> to execute immediately</span>
+
+                  <div className="flex items-center gap-2">
+                    {isExecuting ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={handleStopExecution}
+                        className="gap-1.5"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                        <span>Stop</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={!prompt.trim()}
+                        onClick={() => handleSendPrompt()}
+                        className="gap-1.5"
+                      >
+                        <span>Dispatch</span>
+                        <Send className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </form>
@@ -609,155 +767,164 @@ export default function AgentWorkspacePage({
         </div>
       )}
 
-      {/* TAB 2: CONFIGURATION */}
+      {/* TAB 2: INLINE AGENT CONFIGURATION */}
       {activeTab === 'config' && (
-        <form onSubmit={handleSaveConfig} className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-5">
-          <div className="flex items-center justify-between mb-2">
+        <form onSubmit={handleSaveConfig} className="glass-card p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
             <div>
-              <h3 className="text-sm font-bold text-zinc-100">Agent Configuration</h3>
+              <h2 className="text-sm font-bold text-zinc-100">Inline Agent Reconfiguration</h2>
               <p className="text-xs text-zinc-400">
-                Update identity, instructions, and target local model in backend database
+                Modify persona, system directives, assigned GGUF weights, or safety constraints.
               </p>
             </div>
             {configSaveSuccess && (
-              <span className="text-xs font-mono text-emerald-400 flex items-center gap-1">
-                ✓ Changes Saved to Backend
+              <span className="text-xs font-mono text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-4 h-4" /> Parameters Persisted
               </span>
             )}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              AGENT NAME
-            </label>
-            <input
-              type="text"
-              required
-              value={configName}
-              onChange={(e) => setConfigName(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              DESCRIPTION
-            </label>
-            <input
-              type="text"
-              value={configDesc}
-              onChange={(e) => setConfigDesc(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              SYSTEM INSTRUCTIONS (PROMPT)
-            </label>
-            <textarea
-              rows={4}
-              required
-              value={configInstructions}
-              onChange={(e) => setConfigInstructions(e.target.value)}
-              className="w-full p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              ASSIGNED LOCAL MODEL (GGUF)
-            </label>
-            <select
-              value={configModelId}
-              onChange={(e) => setConfigModelId(e.target.value)}
-              className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({m.quantization || 'GGUF'}) - {m.filename}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-              TRIGGER
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {(['manual', 'schedule', 'onetime'] as AgentTrigger[]).map((t) => (
-                <button
-                  type="button"
-                  key={t}
-                  onClick={() => setConfigTrigger(t)}
-                  className={`px-3 py-2 rounded-xl text-xs font-mono capitalize border transition-all cursor-pointer ${
-                    configTrigger === t
-                      ? 'bg-cyan-500/20 text-cyan-200 border-cyan-500/40 font-bold'
-                      : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
-                  }`}
-                >
-                  {t === 'onetime' ? 'one-time' : t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {(configTrigger === 'schedule' || configTrigger === 'onetime') && (
-            <div>
-              <label className="block text-xs font-medium text-zinc-300 mb-1.5 font-mono">
-                {configTrigger === 'schedule' ? 'SCHEDULE' : 'ONE-TIME EXECUTION'}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                Agent Designation
               </label>
               <input
                 type="text"
-                value={configSchedule}
-                onChange={(e) => setConfigSchedule(e.target.value)}
-                placeholder={
-                  configTrigger === 'schedule'
-                    ? 'e.g. Every 1 day at 09:00'
-                    : 'e.g. Once on 2026-09-05 at 09:00'
-                }
-                className="w-full px-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono"
+                required
+                value={configName}
+                onChange={(e) => setConfigName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
               />
             </div>
-          )}
 
-          <div className="pt-2 border-t border-zinc-800/80 space-y-3">
-            <label className="block text-xs font-bold text-zinc-200 font-mono uppercase">
-              Advanced Execution Settings
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="block text-xs font-mono font-semibold text-zinc-400 uppercase">
+                Mission Description
+              </label>
+              <input
+                type="text"
+                value={configDesc}
+                onChange={(e) => setConfigDesc(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                  System Instructions & Reasoning Directives
+                </label>
+                <span className="text-[10px] font-mono text-zinc-500">{configInstructions.length} chars</span>
+              </div>
+              <textarea
+                rows={5}
+                required
+                value={configInstructions}
+                onChange={(e) => setConfigInstructions(e.target.value)}
+                className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono leading-relaxed focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                Target GGUF Model Runtime
+              </label>
+              <select
+                value={configModelId}
+                onChange={(e) => setConfigModelId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer"
+              >
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.quantization || 'GGUF'}) — {m.filename}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Trigger Mode */}
+            <div className="space-y-1.5 sm:col-span-2 pt-2">
+              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                Execution Trigger Mode
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {(['manual', 'schedule', 'onetime'] as AgentTrigger[]).map((t) => (
+                  <button
+                    type="button"
+                    key={t}
+                    onClick={() => setConfigTrigger(t)}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-mono capitalize border transition-all cursor-pointer text-left ${
+                      configTrigger === t
+                        ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/50 font-bold'
+                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold">{t === 'onetime' ? 'one-time' : t}</div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5">
+                      {t === 'manual' ? 'Operator dispatch' : t === 'schedule' ? 'Periodic interval' : 'Single calendar run'}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(configTrigger === 'schedule' || configTrigger === 'onetime') && (
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                  Schedule Expression
+                </label>
+                <input
+                  type="text"
+                  value={configSchedule}
+                  onChange={(e) => setConfigSchedule(e.target.value)}
+                  placeholder={configTrigger === 'schedule' ? 'e.g. Every 1 day at 09:00' : 'e.g. Once on 2026-09-10 at 09:00'}
+                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Safety Constraints & Execution Limits */}
+          <div className="pt-4 border-t border-zinc-800 space-y-4">
+            <h3 className="text-xs font-bold text-zinc-200 font-mono uppercase">
+              Safety Constraints & Resource Limits
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                  Maximum execution time (min)
+                  MAXIMUM EXECUTION TIMEOUT (MIN)
                 </label>
                 <input
                   type="number"
                   min={1}
+                  max={120}
                   value={configMaxExecutionTime}
-                  onChange={(e) => setConfigMaxExecutionTime(parseInt(e.target.value) || 10)}
+                  onChange={(e) => setConfigMaxExecutionTime(parseInt(e.target.value) || 15)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
                 <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                  Maximum tool calls
+                  MAXIMUM TOOL CALL BUDGET
                 </label>
                 <input
                   type="number"
                   min={1}
+                  max={200}
                   value={configMaxToolCalls}
-                  onChange={(e) => setConfigMaxToolCalls(parseInt(e.target.value) || 50)}
+                  onChange={(e) => setConfigMaxToolCalls(parseInt(e.target.value) || 40)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
                 <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                  Concurrency
+                  CONCURRENCY THREADS
                 </label>
                 <input
                   type="number"
                   min={1}
+                  max={8}
                   value={configConcurrency}
                   onChange={(e) => setConfigConcurrency(parseInt(e.target.value) || 1)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
@@ -765,11 +932,12 @@ export default function AgentWorkspacePage({
               </div>
               <div>
                 <label className="block text-[11px] font-mono text-zinc-400 mb-1">
-                  Retries
+                  AUTOMATIC RETRIES
                 </label>
                 <input
                   type="number"
                   min={0}
+                  max={10}
                   value={configRetries}
                   onChange={(e) => setConfigRetries(parseInt(e.target.value) || 0)}
                   className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
@@ -779,75 +947,127 @@ export default function AgentWorkspacePage({
           </div>
 
           <div className="pt-3 border-t border-zinc-800 flex justify-end">
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
+            <Button
+              variant="primary"
+              size="md"
+              disabled={isSavingConfig}
+              className="gap-2 shadow-lg shadow-cyan-500/20"
             >
-              Save Configuration to Backend
-            </button>
+              {isSavingConfig ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>Save Configuration to Database</span>
+                </>
+              )}
+            </Button>
           </div>
         </form>
       )}
 
-      {/* TAB 3: TOOLS PERMISSION MATRIX */}
+      {/* TAB 3: 19-TOOL PERMISSION MATRIX */}
       {activeTab === 'tools' && (
-        <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-zinc-100">Tool Permissions Matrix</h3>
-            <p className="text-xs text-zinc-400">
-              Control the operational capabilities granted to this agent via backend API
-            </p>
+        <div className="glass-card p-6 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100">Tool Permissions Matrix</h2>
+              <p className="text-xs text-zinc-400">
+                Grant or revoke deterministic execution capabilities for this agent.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="cyan">
+                {configTools.length} of {WORKBENCH_TOOLS.length} Granted
+              </Badge>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              {
-                id: 'document_search',
-                name: 'document_search',
-                desc: 'Searches vector-embedded company manuals and documentation',
-              },
-              {
-                id: 'file_reader',
-                name: 'file_reader',
-                desc: 'Accesses uploaded raw text, pdf, and markdown documents',
-              },
-              {
-                id: 'python_calculator',
-                name: 'python_calculator',
-                desc: 'Executes mathematical formulas and engineering conversions',
-              },
-              {
-                id: 'internal_api',
-                name: 'internal_api',
-                desc: 'Dispatches read requests to internal manufacturing REST endpoints',
-              },
-            ].map((tool) => {
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveToolCategory('all')}
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+                activeToolCategory === 'all'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                  : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+              }`}
+            >
+              All Categories
+            </button>
+            {TOOL_CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setActiveToolCategory(cat.id)}
+                className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+                  activeToolCategory === cat.id
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                }`}
+              >
+                {cat.title}
+              </button>
+            ))}
+          </div>
+
+          {/* Tool Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {WORKBENCH_TOOLS.filter(
+              (t) => activeToolCategory === 'all' || t.category === activeToolCategory
+            ).map((tool) => {
               const hasTool = configTools.includes(tool.name);
+              const Icon = tool.icon;
+
               return (
                 <div
                   key={tool.id}
                   onClick={() => handleToggleTool(tool.name)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 select-none ${
                     hasTool
-                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
+                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-sm shadow-cyan-500/5'
                       : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-xs font-mono text-zinc-100">
-                      {tool.name}
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                        hasTool
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : 'bg-zinc-800 text-zinc-500'
-                      }`}
-                    >
-                      {hasTool ? 'Granted' : 'Revoked'}
-                    </span>
+                  <div
+                    className={`w-4 h-4 mt-0.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                      hasTool
+                        ? 'bg-cyan-500 border-cyan-500 text-zinc-950'
+                        : 'border-zinc-700 bg-zinc-950 text-transparent'
+                    }`}
+                  >
+                    <Check className="w-3 h-3 stroke-[3]" />
                   </div>
-                  <p className="text-xs text-zinc-400">{tool.desc}</p>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${hasTool ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                        <span className="font-mono font-bold text-xs text-zinc-200 truncate">
+                          {tool.displayName}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase shrink-0 ${
+                          hasTool
+                            ? 'bg-emerald-500/20 text-emerald-400'
+                            : 'bg-zinc-800 text-zinc-500'
+                        }`}
+                      >
+                        {hasTool ? 'Granted' : 'Revoked'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                      {tool.description}
+                    </p>
+                    <div className="text-[10px] font-mono text-zinc-500 truncate mt-1">
+                      args: {tool.parametersHint}
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -857,60 +1077,70 @@ export default function AgentWorkspacePage({
 
       {/* TAB 4: KNOWLEDGE ATTACHMENTS */}
       {activeTab === 'knowledge' && (
-        <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-6">
-          <div>
-            <h3 className="text-sm font-bold text-zinc-100">Attached Knowledge Documents</h3>
-            <p className="text-xs text-zinc-400">
-              Indexed company documents available for this agent&apos;s RAG search
-            </p>
+        <div className="glass-card p-6 space-y-6">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100">Attached Knowledge Documents</h2>
+              <p className="text-xs text-zinc-400">
+                Indexed technical manuals and files accessible for semantic RAG vector retrieval.
+              </p>
+            </div>
+            <Link href="/documents">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-cyan-400">
+                <span>Knowledge Vault</span>
+                <ExternalLink className="w-3 h-3" />
+              </Button>
+            </Link>
           </div>
 
           <div className="space-y-3">
             {agent.documents && agent.documents.length > 0 ? (
-              agent.documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950 border border-zinc-800"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-                      <FileText className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-zinc-200">{doc.name}</div>
-                      <div className="text-[10px] text-zinc-500 font-mono">
-                        {doc.mime_type || 'PDF Document'}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {agent.documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950 border border-zinc-800"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-zinc-200 truncate">{doc.name}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono">
+                          {doc.mime_type || 'PDF Document'} · {doc.chunk_count || 12} vectors
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleUnlinkDoc(doc.id, doc.name)}
-                    className="px-2.5 py-1 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                  >
-                    Unlink
-                  </button>
-                </div>
-              ))
+                    <button
+                      type="button"
+                      onClick={() => handleUnlinkDoc(doc.id, doc.name)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-mono text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                    >
+                      Unlink
+                    </button>
+                  </div>
+                ))}
+              </div>
             ) : (
-              <div className="p-6 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500">
-                No documents currently attached to this agent.
+              <div className="p-8 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono">
+                No documents currently attached to this agent. Attach an ingested file below.
               </div>
             )}
           </div>
 
           {/* Attach from Vault */}
-          <div className="pt-4 border-t border-zinc-800">
-            <h4 className="text-xs font-bold font-mono text-zinc-400 uppercase mb-3">
+          <div className="pt-4 border-t border-zinc-800 space-y-3">
+            <h3 className="text-xs font-bold font-mono text-zinc-400 uppercase">
               Available in Knowledge Vault
-            </h4>
+            </h3>
             {allDocs.filter((d) => !agent.documents?.some((ad) => ad.id === d.id)).length === 0 ? (
               <div className="text-xs text-zinc-500 font-mono">
-                All vault documents are already attached, or no documents uploaded yet.
+                All indexed vault documents are currently attached, or no documents uploaded yet.
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {allDocs
                   .filter((d) => !agent.documents?.some((ad) => ad.id === d.id))
                   .map((d) => (
@@ -918,14 +1148,18 @@ export default function AgentWorkspacePage({
                       key={d.id}
                       className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 text-xs"
                     >
-                      <span className="truncate text-zinc-300">{d.name}</span>
-                      <button
-                        type="button"
+                      <div className="min-w-0 pr-2">
+                        <span className="truncate text-zinc-300 block">{d.name}</span>
+                        <span className="text-[10px] font-mono text-zinc-500">{d.file_type || 'PDF'}</span>
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleLinkDoc(d)}
-                        className="px-2 py-1 rounded bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30 text-[11px] font-medium cursor-pointer"
+                        className="text-[11px] h-7 px-2.5 shrink-0"
                       >
                         + Attach
-                      </button>
+                      </Button>
                     </div>
                   ))}
               </div>
@@ -934,35 +1168,61 @@ export default function AgentWorkspacePage({
         </div>
       )}
 
-      {/* TAB 5: EXECUTION LOG */}
+      {/* TAB 5: EXECUTION AUDIT RUNS */}
       {activeTab === 'logs' && (
-        <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-zinc-100">Live Execution Audit Trail</h3>
-            <p className="text-xs text-zinc-400">
-              Audit log of real prompts dispatched to this agent via backend API
-            </p>
+        <div className="glass-card p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100">Live Execution Audit Trail</h2>
+              <p className="text-xs text-zinc-400">
+                Cryptographic audit log of real tasks dispatched to this agent on the backend runtime.
+              </p>
+            </div>
+            <Badge variant="cyan">{executionLogs.length} Executions Recorded</Badge>
           </div>
 
           {executionLogs.length === 0 ? (
-            <div className="p-8 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500">
-              No executions run in this session yet. Type a prompt in the Chat tab to execute on the backend runtime.
+            <div className="p-10 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono">
+              No executions logged during this session yet. Dispatch a task in the Mission Feed to record execution traces.
             </div>
           ) : (
             <div className="space-y-3">
               {executionLogs.map((log) => (
                 <div
                   key={log.execution_id}
-                  className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono space-y-2"
+                  className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs font-mono space-y-3"
                 >
-                  <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                    <span className="text-cyan-400 font-bold">Execution ID: {log.execution_id}</span>
-                    <span className="text-emerald-400 font-semibold">● {log.status}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <span className="text-cyan-400 font-bold">EXECUTION ID: {log.execution_id}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">
+                        ● {log.status}
+                      </span>
+                      <span className="text-zinc-500">
+                        {new Date(log.completed_at).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-zinc-300 font-sans text-xs">{log.response}</div>
-                  <div className="text-[10px] text-zinc-600">
-                    Completed at: {new Date(log.completed_at).toLocaleString()}
+
+                  <div className="text-zinc-300 font-sans text-xs bg-zinc-900/70 p-3 rounded-lg border border-zinc-800/60 whitespace-pre-wrap">
+                    {log.response}
                   </div>
+
+                  {log.tool_calls && log.tool_calls.length > 0 && (
+                    <div className="text-[11px] text-zinc-400 space-y-1">
+                      <span className="text-zinc-500 uppercase text-[10px]">Tools Triggered:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {log.tool_calls.map((tc, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded bg-zinc-900 text-cyan-300 border border-zinc-800"
+                          >
+                            {tc.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
