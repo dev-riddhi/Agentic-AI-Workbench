@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
@@ -204,3 +205,17 @@ def get_agent_documents_controller(db: Session, agent_id: UUID) -> list[Document
             detail="Agent not found",
         )
     return list(agent.documents)
+
+
+def get_available_tools_controller() -> list[dict[str, Any]]:
+    from app.tools import TOOLS
+
+    return [
+        {
+            "id": t["name"],
+            "name": t["name"],
+            "description": t.get("description", ""),
+            "parameters": t.get("parameters", {}),
+        }
+        for t in TOOLS
+    ]

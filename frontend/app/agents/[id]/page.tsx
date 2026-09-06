@@ -14,8 +14,11 @@ import {
   Settings,
   AlertCircle,
   Sliders,
+  Search,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
-import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger } from '@/lib/api/types';
+import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger, AvailableTool } from '@/lib/api/types';
 import { agentsApi } from '@/lib/api/agents';
 import { modelsApi } from '@/lib/api/models';
 import { documentsApi } from '@/lib/api/documents';
@@ -88,6 +91,11 @@ export default function AgentWorkspacePage({
   const [configRetries, setConfigRetries] = useState(3);
   const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
 
+  // Available Tools State
+  const [availableTools, setAvailableTools] = useState<AvailableTool[]>([]);
+  const [toolSearch, setToolSearch] = useState('');
+  const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     let active = true;
 
@@ -95,7 +103,8 @@ export default function AgentWorkspacePage({
       agentsApi.getAgent(id),
       modelsApi.getModels(),
       documentsApi.getDocuments(),
-    ]).then(([agentRes, modelsRes, docsRes]) => {
+      agentsApi.getAvailableTools(),
+    ]).then(([agentRes, modelsRes, docsRes, toolsRes]) => {
       if (!active) return;
 
       if (agentRes.status === 'fulfilled' && agentRes.value) {
@@ -121,6 +130,9 @@ export default function AgentWorkspacePage({
       }
       if (docsRes.status === 'fulfilled') {
         setAllDocs(docsRes.value || []);
+      }
+      if (toolsRes.status === 'fulfilled') {
+        setAvailableTools(toolsRes.value || []);
       }
       setIsLoading(false);
     });
@@ -792,65 +804,145 @@ export default function AgentWorkspacePage({
       {/* TAB 3: TOOLS PERMISSION MATRIX */}
       {activeTab === 'tools' && (
         <div className="p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800 space-y-4">
-          <div>
-            <h3 className="text-sm font-bold text-zinc-100">Tool Permissions Matrix</h3>
-            <p className="text-xs text-zinc-400">
-              Control the operational capabilities granted to this agent via backend API
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-zinc-100">Tool Permissions Matrix</h3>
+              <p className="text-xs text-zinc-400">
+                Grant or revoke tools for this agent. Expand any tool to inspect parameter schemas.
+              </p>
+            </div>
+            <span className="text-xs font-mono px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 self-start sm:self-auto">
+              {configTools.length} granted
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              {
-                id: 'document_search',
-                name: 'document_search',
-                desc: 'Searches vector-embedded company manuals and documentation',
-              },
-              {
-                id: 'file_reader',
-                name: 'file_reader',
-                desc: 'Accesses uploaded raw text, pdf, and markdown documents',
-              },
-              {
-                id: 'python_calculator',
-                name: 'python_calculator',
-                desc: 'Executes mathematical formulas and engineering conversions',
-              },
-              {
-                id: 'internal_api',
-                name: 'internal_api',
-                desc: 'Dispatches read requests to internal manufacturing REST endpoints',
-              },
-            ].map((tool) => {
-              const hasTool = configTools.includes(tool.name);
-              return (
-                <div
-                  key={tool.id}
-                  onClick={() => handleToggleTool(tool.name)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    hasTool
-                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
-                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-xs font-mono text-zinc-100">
-                      {tool.name}
-                    </span>
-                    <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                        hasTool
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : 'bg-zinc-800 text-zinc-500'
-                      }`}
-                    >
-                      {hasTool ? 'Granted' : 'Revoked'}
-                    </span>
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={toolSearch}
+              onChange={(e) => setToolSearch(e.target.value)}
+              placeholder="Search tools or parameters..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 font-mono transition-colors"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            {availableTools
+              .filter((tool) => {
+                const q = toolSearch.toLowerCase().trim();
+                if (!q) return true;
+                return (
+                  tool.name.toLowerCase().includes(q) ||
+                  (tool.description || '').toLowerCase().includes(q) ||
+                  Object.keys(tool.parameters?.properties || {}).some((k) => k.toLowerCase().includes(q))
+                );
+              })
+              .map((tool) => {
+                const hasTool = configTools.includes(tool.name);
+                const isExpanded = !!expandedTools[tool.name];
+                const properties = tool.parameters?.properties || {};
+                const propKeys = Object.keys(properties);
+                const requiredList = tool.parameters?.required || [];
+
+                return (
+                  <div
+                    key={tool.id || tool.name}
+                    className={`rounded-xl border transition-all ${
+                      hasTool
+                        ? 'bg-cyan-500/5 border-cyan-500/30 text-cyan-100'
+                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="p-3.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs font-mono text-zinc-100">
+                            {tool.name}
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
+                            {propKeys.length}p
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleTool(tool.name)}
+                            className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                              hasTool
+                                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
+                                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 border border-zinc-700'
+                            }`}
+                          >
+                            {hasTool ? '✓ Granted' : '+ Grant'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedTools((prev) => ({ ...prev, [tool.name]: !prev[tool.name] }))
+                            }
+                            className="p-1 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                            title="Inspect parameters"
+                          >
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-2">
+                        {tool.description || 'Backend tool'}
+                      </p>
+                    </div>
+
+                    {/* Parameter Details */}
+                    {isExpanded && (
+                      <div className="px-3.5 pb-3.5 pt-2 border-t border-zinc-800/80 bg-zinc-900/40 rounded-b-xl space-y-2">
+                        <div className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
+                          Parameters ({propKeys.length})
+                        </div>
+                        {propKeys.length === 0 ? (
+                          <div className="text-[11px] text-zinc-500 font-mono italic">No parameters</div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                            {propKeys.map((k) => {
+                              const prop = properties[k] || {};
+                              const isReq = requiredList.includes(k);
+                              return (
+                                <div key={k} className="p-2 rounded bg-zinc-950/80 border border-zinc-800 text-[11px] space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono text-cyan-300 font-semibold">{k}</span>
+                                    <span className={`text-[9px] font-mono px-1 rounded ${isReq ? 'text-rose-400 bg-rose-500/10' : 'text-zinc-500 bg-zinc-800'}`}>
+                                      {isReq ? 'required' : 'optional'}
+                                    </span>
+                                    {prop.type && (
+                                      <span className="text-[9px] font-mono text-cyan-400">
+                                        ({prop.type})
+                                      </span>
+                                    )}
+                                    {prop.default !== undefined && (
+                                      <span className="text-[9px] font-mono text-zinc-500">
+                                        default: {String(prop.default)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {prop.description && (
+                                    <div className="text-zinc-400 text-[10px] leading-tight">
+                                      {prop.description}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-xs text-zinc-400">{tool.desc}</p>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}

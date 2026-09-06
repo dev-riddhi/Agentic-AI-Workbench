@@ -12,11 +12,35 @@ export interface TokenResponse {
   expires_in: number;
 }
 
+export interface ToolParameterProperty {
+  type?: string;
+  description?: string;
+  default?: unknown;
+  enum?: string[];
+  items?: { type?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+export interface ToolParameters {
+  type?: string;
+  properties?: Record<string, ToolParameterProperty>;
+  required?: string[];
+  [key: string]: unknown;
+}
+
+export interface AvailableTool {
+  id: string;
+  name: string;
+  description?: string | null;
+  parameters: ToolParameters;
+}
+
 export interface ToolResponse {
   id: string;
   name: string;
   description?: string | null;
-  handler: string;
+  handler?: string | null;
+  parameters?: ToolParameters;
 }
 
 export interface DocumentResponse {

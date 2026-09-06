@@ -12,6 +12,7 @@ from app.features.agents.schemas import (
     AgentStopRequest,
     AgentStopResponse,
     AgentUpdate,
+    AvailableToolResponse,
     DocumentResponse,
 )
 from app.features.user.controller import get_current_user
@@ -57,6 +58,13 @@ def get_running_agents(
     return controller.get_running_agents_controller(
         db=db,
     )
+
+
+@router.get("/tools", response_model=list[AvailableToolResponse], status_code=status.HTTP_200_OK)
+def get_available_tools(
+    current_user: User = Depends(get_current_user),
+):
+    return controller.get_available_tools_controller()
 
 
 @router.get("/{id}", response_model=AgentResponse, status_code=status.HTTP_200_OK)
