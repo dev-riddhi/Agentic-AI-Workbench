@@ -16,7 +16,15 @@ export interface ToolResponse {
   id: string;
   name: string;
   description?: string | null;
-  handler: string;
+  handler?: string | null;
+  parameters?: Record<string, unknown>;
+}
+
+export interface AvailableToolResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+  parameters: Record<string, unknown>;
 }
 
 export interface DocumentResponse {
@@ -39,7 +47,7 @@ export interface AIModelResponse {
   filename: string;
   file_path: string;
   format: string;
-  size_bytes: number;
+  size_bytes?: number | null;
   quantization?: string | null;
   context_window?: number;
   status: string;
@@ -174,6 +182,14 @@ export interface AgentRunResponse {
     status?: string;
   }>;
   completed_at: string;
+}
+
+export interface AgentStopResponse {
+  execution_id?: string | null;
+  agent_id: string;
+  status: string;
+  message: string;
+  stopped_at: string;
 }
 
 export interface SettingsData {

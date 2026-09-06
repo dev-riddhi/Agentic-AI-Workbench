@@ -111,6 +111,15 @@ def get_runtime_logs(
     return {"logs": model_runtime.get_logs(lines=lines)}
 
 
+@router.get("/{id}/progress", status_code=status.HTTP_200_OK)
+def get_download_progress(
+    id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return controller.get_download_progress_controller(db=db, model_id=id)
+
+
 @router.get("/{id}", response_model=AIModelResponse, status_code=status.HTTP_200_OK)
 def get_model(
     id: UUID,

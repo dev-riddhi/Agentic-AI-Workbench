@@ -6,16 +6,19 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 class AIModelDownloadRequest(BaseModel):
     repo_id: str
-    filename: str
+    filename: str | None = None
     name: str | None = None
     quantization: str | None = None
 
     @field_validator("filename")
     @classmethod
-    def validate_gguf_extension(cls, v: str) -> str:
-        if not v.lower().endswith(".gguf"):
-            raise ValueError("Only .gguf model files are supported")
-        return v
+    def validate_gguf_extension(cls, v: str | None) -> str | None:
+        if v is not None and v.strip():
+            clean = v.strip()
+            if not clean.lower().endswith(".gguf"):
+                raise ValueError("Only .gguf model files are supported")
+            return clean
+        return None
 
 
 class AIModelResponse(BaseModel):

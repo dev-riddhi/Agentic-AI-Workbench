@@ -68,7 +68,7 @@ export function Modal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 12 }}
             transition={{ type: "spring", stiffness: 450, damping: 32 }}
-            className={`relative w-full ${maxWidthClasses} bg-zinc-900/95 border border-zinc-700/80 rounded-2xl shadow-2xl p-6 text-zinc-100 overflow-hidden z-10`}
+            className={`relative w-full ${maxWidthClasses} bg-white dark:bg-zinc-900/95 border border-zinc-200 dark:border-zinc-700/80 rounded-2xl shadow-2xl p-6 text-zinc-900 dark:text-zinc-100 overflow-hidden z-10`}
           >
             {/* Specular Ambient Glow */}
             <div className="absolute -top-24 -left-24 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -77,13 +77,13 @@ export function Modal({
             {(title || showCloseButton) && (
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
-                  {title && <h3 className="text-lg font-semibold tracking-tight text-white">{title}</h3>}
-                  {description && <p className="text-sm text-zinc-400 mt-1">{description}</p>}
+                  {title && <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">{title}</h3>}
+                  {description && <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{description}</p>}
                 </div>
                 {showCloseButton && (
                   <button
                     onClick={onClose}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                    className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -136,8 +136,8 @@ export function ConfirmModal({
           </div>
         )}
 
-        <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-        <p className="text-sm text-zinc-400 mb-6 leading-relaxed">{message}</p>
+        <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">{title}</h3>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">{message}</p>
 
         <div className="flex items-center gap-3 w-full">
           <Button

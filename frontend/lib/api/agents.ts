@@ -4,6 +4,8 @@ import {
   AgentCreatePayload,
   AgentUpdatePayload,
   AgentRunResponse,
+  AgentStopResponse,
+  AvailableToolResponse,
   DocumentResponse,
 } from './types';
 
@@ -34,6 +36,11 @@ export const agentsApi = {
     await apiClient.delete(`/agents/${id}`);
   },
 
+  getTools: async (): Promise<AvailableToolResponse[]> => {
+    const response = await apiClient.get<AvailableToolResponse[]>('/agents/tools');
+    return response.data;
+  },
+
   runAgent: async (
     id: string,
     prompt: string,
@@ -48,8 +55,9 @@ export const agentsApi = {
     return response.data;
   },
 
-  stopAgent: async (id: string, execution_id?: string): Promise<void> => {
-    await apiClient.post(`/agents/${id}/stop`, { execution_id });
+  stopAgent: async (id: string, execution_id?: string): Promise<AgentStopResponse> => {
+    const response = await apiClient.post<AgentStopResponse>(`/agents/${id}/stop`, { execution_id });
+    return response.data;
   },
 
   getRunningAgents: async (): Promise<Agent[]> => {

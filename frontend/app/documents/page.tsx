@@ -15,6 +15,7 @@ import {
   FileCode2,
   ArrowRight,
   ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { DocumentResponse } from '@/lib/api/types';
 import { documentsApi } from '@/lib/api/documents';
@@ -37,29 +38,24 @@ export default function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    let active = true;
-    documentsApi
-      .getDocuments()
-      .then((data) => {
-        if (active) setDocuments(data || []);
-      })
-      .catch((err: unknown) => {
-        if (active) {
-          const detail =
-            (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-            'Failed to fetch documents from backend.';
-          toast.error(detail, 'API Error');
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
+  const loadDocuments = async () => {
+    setIsLoading(true);
+    try {
+      const data = await documentsApi.getDocuments();
+      setDocuments(data || []);
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Failed to fetch documents from backend.';
+      toast.error(detail, 'API Error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return () => {
-      active = false;
-    };
-  }, [toast]);
+  useEffect(() => {
+    void loadDocuments();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -190,80 +186,124 @@ export default function DocumentsPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header & Tab Controls */}
-      <div className="glass-card p-5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-zinc-100">Knowledge Vault & Vector RAG</h1>
-              <Badge variant="cyan">HNSW Index</Badge>
-            </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              Secure, air-gapped document extraction and pgvector HNSW indexing for autonomous agents.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5 p-1 bg-zinc-950 rounded-xl border border-zinc-800 text-xs font-medium self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setActiveTab('index')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeTab === 'index'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Catalog ({documents.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('ingest')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeTab === 'ingest'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <UploadCloud className="w-3.5 h-3.5" />
-              <span>Ingest Document</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('inspector')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeTab === 'inspector'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Chunk Inspector</span>
-            </button>
-          </div>
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-h-[52px]">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white flex items-center gap-2.5">
+            <span>Knowledge Vault</span>
+            <Badge variant="cyan" size="sm" className="font-mono">
+              {documents.length} Items
+            </Badge>
+            <Badge variant="active" size="sm" className="font-mono">
+              pgvector RAG
+            </Badge>
+          </h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+            Secure, air-gapped document extraction and pgvector HNSW indexing for autonomous agents
+          </p>
         </div>
 
-        {/* Telemetry Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-800/80 text-xs font-mono">
-          <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-            <span className="text-[10px] text-zinc-500 block">TOTAL DOCUMENTS</span>
-            <span className="text-sm font-bold text-zinc-100">{documents.length} Files</span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-            <span className="text-[10px] text-zinc-500 block">TOTAL STORAGE</span>
-            <span className="text-sm font-bold text-cyan-400">{formatFileSize(totalBytes)}</span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-            <span className="text-[10px] text-zinc-500 block">SEMANTIC CHUNKS</span>
-            <span className="text-sm font-bold text-emerald-400">~{totalChunks} Vectors</span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
-            <span className="text-[10px] text-zinc-500 block">AIR-GAP SECURITY</span>
-            <span className="text-sm font-bold text-zinc-200 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              Local Only
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => { void loadDocuments(); }}
+            isLoading={isLoading}
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />}
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setActiveTab('ingest')}
+            leftIcon={<UploadCloud className="w-3.5 h-3.5" />}
+          >
+            Ingest Document
+          </Button>
+        </div>
+      </div>
+
+      {/* Telemetry Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase block">Total Documents</span>
+          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-mono mt-0.5 block">{documents.length} Files</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase block">Total Storage</span>
+          <span className="text-sm font-bold text-cyan-600 dark:text-cyan-400 font-mono mt-0.5 block">{formatFileSize(totalBytes)}</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase block">Semantic Chunks</span>
+          <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-0.5 block">~{totalChunks} Vectors</span>
+        </div>
+        <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase block">Air-Gap Security</span>
+          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 font-mono mt-0.5 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            Local Only
+          </span>
+        </div>
+      </div>
+
+      {/* Filter Tabs & Search Bar (Agent Page Style) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-2 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm">
+        {/* Category Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('index')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'index'
+                ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/60'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Document Index</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
+              {documents.length}
             </span>
-          </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ingest')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'ingest'
+                ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/60'
+            }`}
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Ingest Document</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('inspector')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'inspector'
+                ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30'
+                : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/60'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>Chunk Inspector</span>
+          </button>
+        </div>
+
+        {/* Live Search Input */}
+        <div className="relative w-full md:w-72">
+          <Search className="w-4 h-4 text-zinc-400 dark:text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search documents by name..."
+            className="w-full pl-10 pr-4 py-1.5 rounded-xl bg-white dark:bg-zinc-950/80 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors font-mono"
+          />
         </div>
       </div>
 
@@ -271,42 +311,57 @@ export default function DocumentsPage() {
       {activeTab === 'index' && (
         <div className="glass-card p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative w-full max-w-sm">
-              <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search documents by name or keyword..."
-                className="w-full pl-10 pr-4 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 transition-colors"
-              />
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>Knowledge Artifacts</span>
+                <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                  ({filteredDocs.length} of {documents.length})
+                </span>
+              </h3>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Vectorized context accessible by autonomous agents during tool-driven retrieval
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="primary"
+                variant="secondary"
                 size="sm"
                 onClick={() => setActiveTab('ingest')}
-                className="gap-1.5"
+                className="gap-1.5 text-xs"
               >
                 <UploadCloud className="w-3.5 h-3.5" />
-                <span>Upload New Document</span>
+                <span>Upload New File</span>
               </Button>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="divide-y divide-zinc-800/60">
-              <SkeletonTableRow />
-              <SkeletonTableRow />
-              <SkeletonTableRow />
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950/40">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-zinc-50 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono uppercase text-[10px]">
+                    <th className="py-3 px-4">Document Designation</th>
+                    <th className="py-3 px-4">Format</th>
+                    <th className="py-3 px-4">Size</th>
+                    <th className="py-3 px-4">Vector Status</th>
+                    <th className="py-3 px-4">Ingestion Date</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
+                  <SkeletonTableRow cols={6} />
+                  <SkeletonTableRow cols={6} />
+                  <SkeletonTableRow cols={6} />
+                </tbody>
+              </table>
             </div>
           ) : filteredDocs.length === 0 ? (
-            <div className="p-12 text-center rounded-2xl bg-zinc-950/40 border border-dashed border-zinc-800 space-y-3">
-              <FileText className="w-10 h-10 text-zinc-600 mx-auto" />
-              <div className="text-sm font-semibold text-zinc-300">
+            <div className="p-12 text-center rounded-2xl bg-zinc-50 dark:bg-zinc-950/40 border border-dashed border-zinc-300 dark:border-zinc-800 space-y-3">
+              <FileText className="w-10 h-10 text-zinc-400 dark:text-zinc-600 mx-auto" />
+              <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-300">
                 {search ? 'No matching documents found' : 'No documents in Knowledge Vault'}
               </div>
-              <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto">
                 {search
                   ? `No indexed files match "${search}". Try clearing your search query.`
                   : 'Ingest company manuals, blueprints, or spreadsheets to enable agent RAG retrieval.'}
@@ -323,10 +378,10 @@ export default function DocumentsPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-zinc-800/80">
+            <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950/40">
               <table className="w-full text-left text-xs">
                 <thead>
-                  <tr className="bg-zinc-900/80 border-b border-zinc-800 text-zinc-400 font-mono uppercase text-[10px]">
+                  <tr className="bg-zinc-50 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono uppercase text-[10px]">
                     <th className="py-3 px-4">Document Designation</th>
                     <th className="py-3 px-4">Format</th>
                     <th className="py-3 px-4">Size</th>
@@ -335,35 +390,35 @@ export default function DocumentsPage() {
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60 bg-zinc-950/40">
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/60">
                   {filteredDocs.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-zinc-900/50 transition-colors">
-                      <td className="py-3.5 px-4 font-medium text-zinc-200">
+                    <tr key={doc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition-colors">
+                      <td className="py-3.5 px-4 font-medium text-zinc-800 dark:text-zinc-200">
                         <div className="flex items-center gap-2.5">
                           {getFileIcon(doc.mime_type || doc.name)}
                           <div className="min-w-0">
-                            <span className="truncate block font-semibold text-zinc-100 max-w-xs sm:max-w-md">
+                            <span className="truncate block font-semibold text-zinc-900 dark:text-zinc-100 max-w-xs sm:max-w-md">
                               {doc.name}
                             </span>
-                            <span className="text-[10px] font-mono text-zinc-500 block truncate">
+                            <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 block truncate">
                               ID: {doc.id}
                             </span>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-400 uppercase text-[11px]">
+                      <td className="py-3.5 px-4 font-mono text-zinc-600 dark:text-zinc-400 uppercase text-[11px]">
                         {doc.mime_type?.split('/')[1] || doc.file_type || 'PDF'}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-400 text-[11px]">
+                      <td className="py-3.5 px-4 font-mono text-zinc-600 dark:text-zinc-400 text-[11px]">
                         {formatFileSize(doc.size_bytes)}
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           {doc.status || 'Indexed'} ({doc.chunk_count || 12} chunks)
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-zinc-500 text-[11px]">
+                      <td className="py-3.5 px-4 font-mono text-zinc-500 dark:text-zinc-400 text-[11px]">
                         {new Date(doc.created_at).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
@@ -376,7 +431,7 @@ export default function DocumentsPage() {
                             type="button"
                             onClick={() => handleDownload(doc.id, doc.name)}
                             title="Download Document"
-                            className="p-1.5 rounded-lg text-zinc-400 hover:text-cyan-300 hover:bg-zinc-800 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                           >
                             <Download className="w-3.5 h-3.5" />
                           </button>
@@ -384,7 +439,7 @@ export default function DocumentsPage() {
                             type="button"
                             onClick={() => handleDelete(doc.id, doc.name)}
                             title="Delete Document"
-                            className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -403,21 +458,21 @@ export default function DocumentsPage() {
       {activeTab === 'ingest' && (
         <div className="glass-card p-8 max-w-2xl mx-auto space-y-6">
           <div className="text-center space-y-1.5">
-            <h2 className="text-base font-bold text-zinc-100">Ingest Knowledge Document</h2>
-            <p className="text-xs text-zinc-400">
+            <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Ingest Knowledge Document</h2>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
               Supported formats: PDF, DOCX, TXT, CSV, XLSX. Documents are chunked and vectorized locally with zero external network egress.
             </p>
           </div>
 
           {uploadSuccess && (
-            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs flex items-center justify-center gap-2">
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-xs flex items-center justify-center gap-2">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span className="font-medium">Document successfully uploaded and indexed in pgvector!</span>
             </div>
           )}
 
           {uploadError && (
-            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs flex items-center justify-center gap-2">
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-medium">{uploadError}</span>
             </div>
@@ -432,8 +487,8 @@ export default function DocumentsPage() {
               onClick={() => fileInputRef.current?.click()}
               className={`relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                 isDragging
-                  ? 'border-cyan-400 bg-cyan-500/10 scale-[1.01]'
-                  : 'border-zinc-700/80 hover:border-cyan-500/50 bg-zinc-950/60'
+                  ? 'border-cyan-500 bg-cyan-500/10 scale-[1.01]'
+                  : 'border-zinc-300 dark:border-zinc-700/80 hover:border-cyan-500/50 bg-zinc-50/50 dark:bg-zinc-950/60'
               }`}
             >
               <input
@@ -444,15 +499,15 @@ export default function DocumentsPage() {
                 className="hidden"
               />
 
-              <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-3 shadow-inner">
+              <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 mb-3 shadow-inner">
                 <UploadCloud className="w-6 h-6" />
               </div>
 
-              <div className="text-sm font-semibold text-zinc-100">
+              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {selectedFile ? selectedFile.name : 'Click to select or drag & drop document'}
               </div>
 
-              <p className="text-xs text-zinc-500 mt-1 font-mono">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 font-mono">
                 {selectedFile
                   ? `${formatFileSize(selectedFile.size)} · Ready to ingest`
                   : 'PDF, DOCX, TXT, CSV, XLSX (Up to 100MB)'}
@@ -462,11 +517,11 @@ export default function DocumentsPage() {
             {/* Upload Progress Bar */}
             {isUploading && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-600 dark:text-zinc-400">
                   <span>Extracting Text & Generating Vectors...</span>
-                  <span className="text-cyan-400">{uploadProgress}%</span>
+                  <span className="text-cyan-600 dark:text-cyan-400 font-bold">{uploadProgress}%</span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-200"
                     style={{ width: `${uploadProgress}%` }}
@@ -500,20 +555,20 @@ export default function DocumentsPage() {
       {/* TAB 3: CHUNK INSPECTOR */}
       {activeTab === 'inspector' && (
         <div className="glass-card p-6 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-100">Vector Index & Chunk Inspector</h2>
-              <p className="text-xs text-zinc-400">
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Vector Index & Chunk Inspector</h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Inspect partitioned text chunks and embedding metadata stored in pgvector.
               </p>
             </div>
-            <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-cyan-400 self-start sm:self-auto">
+            <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-cyan-600 dark:text-cyan-400 self-start sm:self-auto font-medium">
               Embeddings: 384-dim HNSW Cosine
             </span>
           </div>
 
           {documents.length === 0 ? (
-            <div className="p-10 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono">
+            <div className="p-10 text-center rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-500 font-mono">
               No documents currently indexed. Ingest a document to inspect vector chunk distributions.
             </div>
           ) : (
@@ -521,18 +576,18 @@ export default function DocumentsPage() {
               {documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 flex flex-col justify-between space-y-3"
+                  className="p-4 rounded-xl bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col justify-between space-y-3"
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         {getFileIcon(doc.mime_type || doc.name)}
-                        <span className="text-xs font-bold text-zinc-100 truncate">{doc.name}</span>
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{doc.name}</span>
                       </div>
                       <Badge variant="active">HNSW Ready</Badge>
                     </div>
 
-                    <div className="p-3 rounded-lg bg-zinc-900/60 border border-zinc-800/80 text-xs font-mono text-zinc-300 space-y-1.5">
+                    <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800/80 text-xs font-mono text-zinc-700 dark:text-zinc-300 space-y-1.5">
                       <div className="flex justify-between">
                         <span className="text-zinc-500">FORMAT:</span>
                         <span>{doc.mime_type || 'application/pdf'}</span>
@@ -543,7 +598,7 @@ export default function DocumentsPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-500">VECTOR CHUNKS:</span>
-                        <span className="text-emerald-400">~{doc.chunk_count || 12} Chunks</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">~{doc.chunk_count || 12} Chunks</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-500">INGESTED:</span>
@@ -552,12 +607,12 @@ export default function DocumentsPage() {
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-zinc-500 truncate max-w-[200px]">ID: {doc.id}</span>
+                  <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">ID: {doc.id}</span>
                     <button
                       type="button"
                       onClick={() => handleDownload(doc.id, doc.name)}
-                      className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                      className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 flex items-center gap-1 cursor-pointer font-medium"
                     >
                       <span>Download</span>
                       <ArrowRight className="w-3 h-3" />

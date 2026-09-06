@@ -21,6 +21,132 @@ from database.models import AIModel
 AI_MODELS_DIR = os.getenv("AI_MODELS_DIR", "models")
 os.makedirs(AI_MODELS_DIR, exist_ok=True)
 
+# In-memory store for active Hugging Face download progress: model_id_str -> dict
+ACTIVE_DOWNLOADS: dict[str, dict[str, Any]] = {}
+
+
+def make_progress_tracker(model_id_str: str):
+    from tqdm import tqdm
+
+    class DownloadProgressTracker(tqdm):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            if model_id_str in ACTIVE_DOWNLOADS:
+                ACTIVE_DOWNLOADS[model_id_str]["total_bytes"] = self.total or 0
+
+        def update(self, n=1):
+            super().update(n)
+            if model_id_str in ACTIVE_DOWNLOADS:
+                rec = ACTIVE_DOWNLOADS[model_id_str]
+                rec["downloaded_bytes"] = self.n
+                if self.total and self.total > 0:
+                    rec["total_bytes"] = self.total
+                    rec["percent"] = round((self.n * 100) / self.total, 1)
+                rate = self.format_dict.get("rate")
+                if rate:
+                    if rate >= 1024 * 1024:
+                        rec["speed"] = f"{rate / (1024 * 1024):.1f} MB/s"
+                    elif rate >= 1024:
+                        rec["speed"] = f"{rate / 1024:.1f} KB/s"
+                    else:
+                        rec["speed"] = f"{rate:.0f} B/s"
+
+    return DownloadProgressTracker
+
+
+def normalize_repo_id(repo_id: str) -> tuple[str, str | None]:
+    clean = repo_id.strip()
+    for prefix in ("https://huggingface.co/", "http://huggingface.co/"):
+        if clean.startswith(prefix):
+            clean = clean[len(prefix):]
+    clean = clean.strip("/")
+    parts = clean.split("/")
+    if len(parts) >= 2:
+        extracted = f"{parts[0]}/{parts[1]}"
+        if len(parts) >= 5 and parts[2] in ("blob", "resolve") and parts[-1].lower().endswith(".gguf"):
+            return extracted, parts[-1]
+        return extracted, None
+    return clean, None
+
+
+def resolve_repo_gguf_file(repo_id: str) -> str:
+    try:
+        from huggingface_hub import list_repo_files
+        files = list_repo_files(repo_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failed to query Hugging Face repository '{repo_id}': {str(exc)}",
+        )
+    gguf_files = [f for f in files if f.lower().endswith(".gguf")]
+    if not gguf_files:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No .gguf model files found in Hugging Face repository '{repo_id}'",
+        )
+    preferred_quants = ["q4_k_m", "q4_0", "q5_k_m", "q4_k_s", "q5_0", "q8_0"]
+    for pref in preferred_quants:
+        for gf in gguf_files:
+            if pref in gf.lower():
+                return gf
+    return gguf_files[0]
+
+
+def extract_gguf_metadata(file_path: str, filename: str) -> tuple[str, str | None]:
+    """Uses gguf.GGUFReader to extract friendly display name and quantization profile from a .gguf binary."""
+    safe_filename = os.path.basename(filename)
+    friendly_name: str | None = None
+    quant: str | None = None
+
+    try:
+        reader = GGUFReader(file_path)
+
+        def get_field_val(field_name: str) -> str | None:
+            f = reader.fields.get(field_name)
+            if not f:
+                return None
+            try:
+                val = f.contents()
+                if isinstance(val, (bytes, bytearray)):
+                    return val.decode("utf-8", errors="ignore").strip()
+                return str(val).strip()
+            except Exception:
+                return None
+
+        # 1. Extract model name from GGUF metadata
+        gguf_name = (
+            get_field_val("general.name")
+            or get_field_val("general.basename")
+            or get_field_val("general.base_model.0.name")
+        )
+
+        # 2. Extract quantization type from GGUF tensors
+        tensor_quant_types = [
+            t.tensor_type.name
+            for t in reader.tensors
+            if t.tensor_type.name not in ("F32", "F16", "UNKNOWN")
+        ]
+        if tensor_quant_types:
+            quant = max(set(tensor_quant_types), key=tensor_quant_types.count).upper()
+        else:
+            quant = extract_quantization(safe_filename)
+
+        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
+        model_name = gguf_name or base_name
+
+        if quant and quant not in model_name.upper():
+            friendly_name = f"{model_name} ({quant})"
+        else:
+            friendly_name = model_name
+
+    except Exception as exc:
+        logger.warning("Failed to extract GGUFReader metadata for '%s': %s", file_path, exc)
+        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
+        quant = extract_quantization(safe_filename) or "CUSTOM"
+        friendly_name = f"{base_name} ({quant})" if quant and quant not in base_name else base_name
+
+    return friendly_name, quant
+
 
 def extract_quantization(filename: str) -> str | None:
     match = re.search(r"(?i)\b(q[0-9]_[a-z0-9_]+|f16|f32|bf16)\b", filename)
@@ -33,22 +159,35 @@ def execute_hf_download(
     filename: str,
     target_dir: str,
 ) -> None:
+    model_id_str = str(model_id)
     with SessionLocal() as db:
         ai_model = model.get_ai_model_by_id(db, model_id)
         if not ai_model:
             return
 
         try:
+            tracker_cls = make_progress_tracker(model_id_str)
             downloaded_path = hf_hub_download(
                 repo_id=repo_id,
                 filename=filename,
                 local_dir=target_dir,
+                tqdm_class=tracker_cls,
             )
             file_size = (
                 os.path.getsize(downloaded_path)
                 if os.path.exists(downloaded_path)
                 else None
             )
+
+            # Metadata extraction phase using GGUFReader
+            if model_id_str in ACTIVE_DOWNLOADS:
+                ACTIVE_DOWNLOADS[model_id_str]["status"] = "extracting_metadata"
+                ACTIVE_DOWNLOADS[model_id_str]["percent"] = 100.0
+
+            friendly_name, quant = extract_gguf_metadata(downloaded_path, filename)
+
+            ai_model.name = friendly_name
+            ai_model.quantization = quant
             model.update_ai_model_status(
                 db=db,
                 model=ai_model,
@@ -56,7 +195,18 @@ def execute_hf_download(
                 file_path=downloaded_path,
                 size_bytes=file_size,
             )
+
+            if model_id_str in ACTIVE_DOWNLOADS:
+                ACTIVE_DOWNLOADS[model_id_str]["status"] = "ready"
+                ACTIVE_DOWNLOADS[model_id_str]["percent"] = 100.0
+                ACTIVE_DOWNLOADS[model_id_str]["name"] = friendly_name
+                ACTIVE_DOWNLOADS[model_id_str]["quantization"] = quant
+
         except Exception as exc:
+            logger.error("HF download failed for %s (%s/%s): %s", model_id, repo_id, filename, exc)
+            if model_id_str in ACTIVE_DOWNLOADS:
+                ACTIVE_DOWNLOADS[model_id_str]["status"] = "failed"
+                ACTIVE_DOWNLOADS[model_id_str]["error"] = str(exc)
             model.update_ai_model_status(
                 db=db,
                 model=ai_model,
@@ -71,7 +221,12 @@ def download_ai_model_controller(
     background_tasks: BackgroundTasks | None = None,
     run_in_background: bool = True,
 ) -> AIModel:
-    filename = download_req.filename.strip()
+    norm_repo, extracted_filename = normalize_repo_id(download_req.repo_id)
+    filename = (download_req.filename.strip() if download_req.filename and download_req.filename.strip() else None) or extracted_filename
+
+    if not filename:
+        filename = resolve_repo_gguf_file(norm_repo)
+
     if not filename.lower().endswith(".gguf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -81,13 +236,13 @@ def download_ai_model_controller(
     # Check if model already registered
     existing_model = model.get_ai_model_by_repo_and_file(
         db=db,
-        repo_id=download_req.repo_id,
+        repo_id=norm_repo,
         filename=filename,
     )
     if existing_model and existing_model.status in ("ready", "downloading"):
         return existing_model
 
-    safe_repo_dir = download_req.repo_id.replace("/", "--")
+    safe_repo_dir = norm_repo.replace("/", "--")
     target_dir = os.path.join(AI_MODELS_DIR, safe_repo_dir)
     os.makedirs(target_dir, exist_ok=True)
     expected_path = os.path.join(target_dir, filename)
@@ -107,7 +262,7 @@ def download_ai_model_controller(
         ai_model = model.create_ai_model(
             db=db,
             name=friendly_name,
-            repo_id=download_req.repo_id,
+            repo_id=norm_repo,
             filename=filename,
             file_path=expected_path,
             format="gguf",
@@ -115,11 +270,24 @@ def download_ai_model_controller(
             status="downloading",
         )
 
+    model_id_str = str(ai_model.id)
+    ACTIVE_DOWNLOADS[model_id_str] = {
+        "model_id": model_id_str,
+        "repo_id": norm_repo,
+        "filename": filename,
+        "status": "downloading",
+        "downloaded_bytes": 0,
+        "total_bytes": 0,
+        "percent": 0.0,
+        "speed": None,
+        "error": None,
+    }
+
     if run_in_background and background_tasks is not None:
         background_tasks.add_task(
             execute_hf_download,
             model_id=ai_model.id,
-            repo_id=download_req.repo_id,
+            repo_id=norm_repo,
             filename=filename,
             target_dir=target_dir,
         )
@@ -127,13 +295,40 @@ def download_ai_model_controller(
     else:
         execute_hf_download(
             model_id=ai_model.id,
-            repo_id=download_req.repo_id,
+            repo_id=norm_repo,
             filename=filename,
             target_dir=target_dir,
         )
         db.expire_all()
         refreshed = model.get_ai_model_by_id(db, ai_model.id)
         return refreshed or ai_model
+
+
+def get_download_progress_controller(db: Session, model_id: UUID) -> dict[str, Any]:
+    model_id_str = str(model_id)
+    if model_id_str in ACTIVE_DOWNLOADS:
+        return ACTIVE_DOWNLOADS[model_id_str]
+
+    ai_model = model.get_ai_model_by_id(db, model_id)
+    if not ai_model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI Model not found",
+        )
+
+    return {
+        "model_id": model_id_str,
+        "repo_id": ai_model.repo_id,
+        "filename": ai_model.filename,
+        "name": ai_model.name,
+        "quantization": ai_model.quantization,
+        "status": ai_model.status,
+        "downloaded_bytes": ai_model.size_bytes or 0,
+        "total_bytes": ai_model.size_bytes or 0,
+        "percent": 100.0 if ai_model.status == "ready" else 0.0,
+        "speed": None,
+        "error": ai_model.error_message,
+    }
 
 
 def get_ai_models_controller(
@@ -209,56 +404,12 @@ def upload_ai_model_controller(
     file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
 
     # Use GGUFReader to automatically read model info from the uploaded binary
-    friendly_name: str | None = None
-    quant: str | None = None
+    friendly_name, quant = extract_gguf_metadata(file_path, safe_filename)
 
-    try:
-        reader = GGUFReader(file_path)
-
-        def get_field_val(field_name: str) -> str | None:
-            f = reader.fields.get(field_name)
-            if not f:
-                return None
-            try:
-                val = f.contents()
-                if isinstance(val, (bytes, bytearray)):
-                    return val.decode("utf-8", errors="ignore").strip()
-                return str(val).strip()
-            except Exception:
-                return None
-
-        # 1. Extract model name from GGUF metadata
-        gguf_name = (
-            get_field_val("general.name")
-            or get_field_val("general.basename")
-            or get_field_val("general.base_model.0.name")
-        )
-
-        # 2. Extract quantization type from GGUF tensors
-        tensor_quant_types = [
-            t.tensor_type.name
-            for t in reader.tensors
-            if t.tensor_type.name not in ("F32", "F16", "UNKNOWN")
-        ]
-        if tensor_quant_types:
-            quant = max(set(tensor_quant_types), key=tensor_quant_types.count).upper()
-        else:
-            quant = extract_quantization(safe_filename)
-
-        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
-        model_name = gguf_name or base_name
-
-        # If quantization not already present in the model name, format friendly display name
-        if quant and quant not in model_name.upper():
-            friendly_name = f"{model_name} ({quant})"
-        else:
-            friendly_name = model_name
-
-    except Exception as exc:
-        logger.warning("Failed to extract GGUFReader metadata for '%s': %s", file_path, exc)
-        base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
-        quant = extract_quantization(safe_filename) or "CUSTOM"
-        friendly_name = f"{base_name} ({quant})" if quant and quant not in base_name else base_name
+    if name and name.strip():
+        friendly_name = name.strip()
+    if quantization and quantization.strip():
+        quant = quantization.strip()
 
     # Check if model is already registered
     existing_model = model.get_ai_model_by_repo_and_file(

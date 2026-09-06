@@ -277,16 +277,16 @@ export default function NewAgentPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/agents"
-            className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-colors"
+            className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shadow-xs"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-zinc-100">Autonomous Agent Builder</h1>
+              <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Autonomous Agent Builder</h1>
               <Badge variant="cyan">Studio v2.4</Badge>
             </div>
-            <p className="text-xs text-zinc-400 mt-0.5">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
               Construct an air-gapped autonomous worker with deterministic tool permissions and local GGUF reasoning.
             </p>
           </div>
@@ -324,7 +324,7 @@ export default function NewAgentPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs flex items-center gap-2.5">
+        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2.5">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span className="font-medium">{error}</span>
         </div>
@@ -336,20 +336,20 @@ export default function NewAgentPage() {
         <div className="lg:col-span-8 space-y-6">
           {/* STEP 1: Identity & Persona */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   01
                 </div>
-                <h2 className="text-sm font-bold text-zinc-100">Identity & Operational Persona</h2>
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Identity & Operational Persona</h2>
               </div>
               <span className="text-[11px] font-mono text-zinc-500">Core Profile</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="block text-xs font-semibold text-zinc-200 uppercase tracking-wider font-mono">
-                  Agent Designation / Name <span className="text-rose-400">*</span>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider font-mono">
+                  Agent Designation / Name <span className="text-rose-500 dark:text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -357,12 +357,12 @@ export default function NewAgentPage() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., Hydraulic Diagnostics Specialist"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950/80 border border-zinc-300 dark:border-zinc-800 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
                 />
               </div>
 
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider font-mono">
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider font-mono">
                   Mission Description <span className="text-zinc-500 font-normal">(Optional)</span>
                 </label>
                 <input
@@ -370,16 +370,16 @@ export default function NewAgentPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Briefly state the agent's objective and domain boundaries..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-950/80 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-200 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 transition-colors"
                 />
               </div>
             </div>
 
             {/* Quick Prompt Starters */}
-            <div className="space-y-2 pt-2 border-t border-zinc-800/60">
+            <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800/60">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <label className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
                   <span>PRESET SYSTEM TEMPLATES</span>
                 </label>
                 <span className="text-[10px] text-zinc-500">Click to apply template</span>
@@ -390,9 +390,9 @@ export default function NewAgentPage() {
                     key={starter.id}
                     type="button"
                     onClick={() => applyPromptStarter(starter)}
-                    className="p-2.5 rounded-xl bg-zinc-950/60 border border-zinc-800 hover:border-cyan-500/40 hover:bg-zinc-900/60 text-left transition-all group cursor-pointer"
+                    className="p-2.5 rounded-xl bg-white dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/40 dark:hover:bg-zinc-900/60 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-xs font-semibold text-zinc-200 group-hover:text-cyan-300 transition-colors">
+                    <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-cyan-700 dark:group-hover:text-cyan-300 transition-colors">
                       {starter.title}
                     </div>
                     <div className="text-[10px] text-zinc-500 line-clamp-1 mt-0.5">
@@ -406,8 +406,8 @@ export default function NewAgentPage() {
             {/* Instructions Prompt Textarea */}
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-semibold text-zinc-200 uppercase tracking-wider font-mono">
-                  System Instructions & Reasoning Directives <span className="text-rose-400">*</span>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider font-mono">
+                  System Instructions & Reasoning Directives <span className="text-rose-500 dark:text-rose-400">*</span>
                 </label>
                 <span className="text-[10px] font-mono text-zinc-500">{instructions.length} chars</span>
               </div>
@@ -418,7 +418,7 @@ export default function NewAgentPage() {
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   placeholder="Define step-by-step reasoning constraints, tool call behaviors, and safety boundaries..."
-                  className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono leading-relaxed transition-colors"
+                  className="w-full p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-mono leading-relaxed transition-colors"
                 />
               </div>
               <p className="text-[10px] text-zinc-500">
@@ -429,18 +429,18 @@ export default function NewAgentPage() {
 
           {/* STEP 2: Local GGUF Model Selector */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   02
                 </div>
-                <h2 className="text-sm font-bold text-zinc-100">Local GGUF Model Runtime</h2>
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Local GGUF Model Runtime</h2>
               </div>
               <span className="text-[11px] font-mono text-zinc-500">Air-Gapped LLM</span>
             </div>
 
             {isLoading ? (
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 animate-pulse text-xs text-zinc-500 font-mono text-center">
+              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 animate-pulse text-xs text-zinc-500 font-mono text-center">
                 Querying local llama-server engine...
               </div>
             ) : models.length > 0 ? (
@@ -455,22 +455,22 @@ export default function NewAgentPage() {
                         onClick={() => setModelId(m.id)}
                         className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-3 ${
                           isSelected
-                            ? 'bg-cyan-500/10 border-cyan-500/60 shadow-sm shadow-cyan-500/10'
-                            : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+                            ? 'bg-cyan-50/80 dark:bg-cyan-500/10 border-cyan-400 dark:border-cyan-500/60 shadow-xs'
+                            : 'bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <Cpu className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-zinc-500'}`} />
-                            <span className="text-xs font-bold text-zinc-200 line-clamp-1">{m.name}</span>
+                            <Cpu className={`w-4 h-4 shrink-0 ${isSelected ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`} />
+                            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 line-clamp-1">{m.name}</span>
                           </div>
                           <Badge variant={m.status === 'loaded' ? 'active' : 'offline'}>
                             {m.status === 'loaded' ? 'Active' : 'Standby'}
                           </Badge>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400">
-                          <span className="text-cyan-400/90">{m.quantization || 'Q4_K_M'}</span>
+                        <div className="flex items-center justify-between text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
+                          <span className="text-cyan-700 dark:text-cyan-400/90 font-medium">{m.quantization || 'Q4_K_M'}</span>
                           <span className="text-zinc-500">{m.context_window || 4096} ctx</span>
                         </div>
                       </button>
@@ -479,22 +479,22 @@ export default function NewAgentPage() {
                 </div>
 
                 {selectedModel && (
-                  <div className="p-3 rounded-xl bg-zinc-950/90 border border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                    <div className="flex items-center gap-2 text-zinc-300">
+                  <div className="p-3 rounded-xl bg-white dark:bg-zinc-950/90 border border-zinc-200 dark:border-zinc-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono shadow-2xs">
+                    <div className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
                       <span className="text-zinc-500">File:</span>
-                      <span className="text-zinc-200 truncate max-w-xs">{selectedModel.filename}</span>
+                      <span className="text-zinc-900 dark:text-zinc-200 truncate max-w-xs font-medium">{selectedModel.filename}</span>
                     </div>
-                    <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
-                      <span>Backend: <strong className="text-zinc-200">llama.cpp</strong></span>
-                      <span>Loopback: <strong className="text-emerald-400">127.0.0.1:8000</strong></span>
+                    <div className="flex items-center gap-3 text-zinc-500 dark:text-zinc-400 text-[11px]">
+                      <span>Backend: <strong className="text-zinc-800 dark:text-zinc-200">llama.cpp</strong></span>
+                      <span>Loopback: <strong className="text-emerald-600 dark:text-emerald-400">127.0.0.1:8000</strong></span>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs flex items-center justify-between">
                 <span>No local GGUF models registered. Please download or register a model first.</span>
-                <Link href="/models" className="text-cyan-400 underline font-mono text-[11px]">
+                <Link href="/models" className="text-cyan-600 dark:text-cyan-400 underline font-mono text-[11px]">
                   Go to Model Hub →
                 </Link>
               </div>
@@ -503,14 +503,14 @@ export default function NewAgentPage() {
 
           {/* STEP 3: Trigger Engine & Visual Scheduler */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   03
                 </div>
-                <h2 className="text-sm font-bold text-zinc-100">Trigger Engine & Scheduler</h2>
+                <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Trigger Engine & Scheduler</h2>
               </div>
-              <span className="text-[11px] font-mono text-cyan-400">{trigger.toUpperCase()}</span>
+              <span className="text-[11px] font-mono text-cyan-700 dark:text-cyan-400 font-semibold">{trigger.toUpperCase()}</span>
             </div>
 
             {/* Trigger Cards */}
@@ -525,24 +525,24 @@ export default function NewAgentPage() {
                     onClick={() => setTrigger(opt.id)}
                     className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-3 ${
                       isSelected
-                        ? 'bg-cyan-500/10 border-cyan-500/60 text-zinc-100 shadow-sm shadow-cyan-500/10'
-                        : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:border-zinc-700'
+                        ? 'bg-cyan-50/80 dark:bg-cyan-500/10 border-cyan-400 dark:border-cyan-500/60 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                        : 'bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${isSelected ? 'text-cyan-400' : 'text-zinc-500'}`} />
-                        <span className="text-xs font-bold text-zinc-200">{opt.label}</span>
+                        <Icon className={`w-4 h-4 ${isSelected ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`} />
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-200">{opt.label}</span>
                       </div>
                       <div
                         className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                          isSelected ? 'border-cyan-400 bg-cyan-400' : 'border-zinc-700 bg-zinc-950'
+                          isSelected ? 'border-cyan-500 bg-cyan-500 dark:border-cyan-400 dark:bg-cyan-400' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950'
                         }`}
                       >
-                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-zinc-950" />}
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
                       </div>
                     </div>
-                    <div className="text-[11px] text-zinc-400 leading-relaxed">{opt.description}</div>
+                    <div className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">{opt.description}</div>
                   </button>
                 );
               })}
@@ -550,49 +550,49 @@ export default function NewAgentPage() {
 
             {/* Visual Interval Scheduler */}
             {trigger === 'schedule' && (
-              <div className="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/25 space-y-3">
+              <div className="p-4 rounded-xl bg-cyan-50/60 dark:bg-cyan-500/5 border border-cyan-200 dark:border-cyan-500/25 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-zinc-200 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                     Recurring Cadence Controls
                   </span>
                   {cronExpression && (
-                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-cyan-400">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-cyan-700 dark:text-cyan-400 shadow-2xs">
                       Cron: {cronExpression}
                     </span>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
-                  <span className="font-mono text-zinc-400">REPEAT EVERY</span>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-700 dark:text-zinc-300">
+                  <span className="font-mono text-zinc-500 dark:text-zinc-400">REPEAT EVERY</span>
                   <input
                     type="number"
                     min={1}
                     value={scheduleInterval}
                     onChange={(e) => setScheduleInterval(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-16 px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 text-center font-mono focus:outline-none focus:border-cyan-500"
+                    className="w-16 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 text-center font-mono focus:outline-none focus:border-cyan-500"
                   />
                   <select
                     value={scheduleUnit}
                     onChange={(e) => setScheduleUnit(e.target.value as 'hour' | 'day' | 'week')}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
                   >
                     <option value="hour">Hours</option>
                     <option value="day">Days</option>
                     <option value="week">Weeks</option>
                   </select>
 
-                  <span className="font-mono text-zinc-400 ml-2">AT TIME</span>
+                  <span className="font-mono text-zinc-500 dark:text-zinc-400 ml-2">AT TIME</span>
                   <input
                     type="time"
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                   />
                   <span className="text-[11px] text-zinc-500 font-mono">UTC</span>
                 </div>
 
-                <div className="text-[11px] font-mono text-cyan-300/80 bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/80">
+                <div className="text-[11px] font-mono text-cyan-800 dark:text-cyan-300/80 bg-white/80 dark:bg-zinc-950/60 p-2.5 rounded-lg border border-cyan-200/80 dark:border-zinc-800/80">
                   Preview: {scheduleHumanSummary}
                 </div>
               </div>
@@ -600,30 +600,30 @@ export default function NewAgentPage() {
 
             {/* One-Time Execution Scheduler */}
             {trigger === 'onetime' && (
-              <div className="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/25 space-y-3">
-                <span className="text-xs font-bold text-zinc-200 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-cyan-400" />
+              <div className="p-4 rounded-xl bg-cyan-50/60 dark:bg-cyan-500/5 border border-cyan-200 dark:border-cyan-500/25 space-y-3">
+                <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
                   Target Execution Date & Time
                 </span>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-300">
-                  <span className="font-mono text-zinc-400">EXECUTE ON</span>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-700 dark:text-zinc-300">
+                  <span className="font-mono text-zinc-500 dark:text-zinc-400">EXECUTE ON</span>
                   <input
                     type="date"
                     value={onetimeDate}
                     onChange={(e) => setOnetimeDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                   />
-                  <span className="font-mono text-zinc-400">AT</span>
+                  <span className="font-mono text-zinc-500 dark:text-zinc-400">AT</span>
                   <input
                     type="time"
                     value={onetimeTime}
                     onChange={(e) => setOnetimeTime(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-950 border border-zinc-700 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                    className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                   />
                 </div>
 
-                <div className="text-[11px] font-mono text-cyan-300/80 bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-800/80">
+                <div className="text-[11px] font-mono text-cyan-800 dark:text-cyan-300/80 bg-white/80 dark:bg-zinc-950/60 p-2.5 rounded-lg border border-cyan-200/80 dark:border-zinc-800/80">
                   Preview: {scheduleHumanSummary}
                 </div>
               </div>
@@ -632,20 +632,20 @@ export default function NewAgentPage() {
 
           {/* STEP 4: Comprehensive 19-Tool Permission Matrix */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   04
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-100">Tool Permission Matrix (19 Tools)</h2>
-                  <p className="text-[11px] text-zinc-400">
+                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Tool Permission Matrix (19 Tools)</h2>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                     Grant fine-grained capabilities to this agent. All calls execute deterministically.
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-cyan-400 font-semibold">
+                <span className="text-xs font-mono text-cyan-700 dark:text-cyan-400 font-semibold">
                   {selectedTools.length} of {WORKBENCH_TOOLS.length} Granted
                 </span>
               </div>
@@ -656,10 +656,10 @@ export default function NewAgentPage() {
               <button
                 type="button"
                 onClick={() => setActiveToolCategory('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+                className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
                   activeToolCategory === 'all'
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    ? 'bg-cyan-50 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40 font-semibold'
+                    : 'bg-white dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800'
                 }`}
               >
                 All Categories
@@ -669,10 +669,10 @@ export default function NewAgentPage() {
                   key={cat.id}
                   type="button"
                   onClick={() => setActiveToolCategory(cat.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+                  className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
                     activeToolCategory === cat.id
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                      : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                      ? 'bg-cyan-50 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40 font-semibold'
+                      : 'bg-white dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800'
                   }`}
                 >
                   {cat.title}
@@ -689,22 +689,22 @@ export default function NewAgentPage() {
                 const countSelected = category.tools.filter((t) => selectedTools.includes(t.name)).length;
 
                 return (
-                  <div key={category.id} className="rounded-xl border border-zinc-800/80 bg-zinc-950/50 overflow-hidden">
-                    <div className="px-4 py-2.5 bg-zinc-900/60 border-b border-zinc-800/60 flex items-center justify-between">
+                  <div key={category.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-zinc-950/50 overflow-hidden shadow-2xs">
+                    <div className="px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800/60 flex items-center justify-between">
                       <div>
-                        <span className="text-xs font-bold text-zinc-200">{category.title}</span>
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{category.title}</span>
                         <span className="text-[11px] text-zinc-500 ml-2 hidden sm:inline">
                           — {category.description}
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-mono text-zinc-400">
+                        <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400">
                           {countSelected}/{category.tools.length} active
                         </span>
                         <button
                           type="button"
                           onClick={() => handleSelectAllCategory(category.tools)}
-                          className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 underline cursor-pointer"
+                          className="text-[10px] font-mono text-cyan-700 dark:text-cyan-400 hover:underline cursor-pointer font-medium"
                         >
                           {allSelected ? 'Deselect All' : 'Select All'}
                         </button>
@@ -722,15 +722,15 @@ export default function NewAgentPage() {
                             onClick={() => handleToolToggle(tool.name)}
                             className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3 select-none ${
                               isChecked
-                                ? 'bg-cyan-500/10 border-cyan-500/40 text-zinc-100 shadow-sm shadow-cyan-500/5'
-                                : 'bg-zinc-900/40 border-zinc-800/70 text-zinc-400 hover:border-zinc-700'
+                                ? 'bg-cyan-50/80 dark:bg-cyan-500/10 border-cyan-300 dark:border-cyan-500/40 text-zinc-900 dark:text-zinc-100 shadow-2xs'
+                                : 'bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800/70 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
                             }`}
                           >
                             <div
                               className={`w-4 h-4 mt-0.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
                                 isChecked
                                   ? 'bg-cyan-500 border-cyan-500 text-zinc-950'
-                                  : 'border-zinc-700 bg-zinc-950 text-transparent'
+                                  : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-transparent'
                               }`}
                             >
                               <CheckCircle2 className="w-3 h-3 stroke-[3]" />
@@ -739,22 +739,22 @@ export default function NewAgentPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-1 mb-1">
                                 <div className="flex items-center gap-1.5 truncate">
-                                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isChecked ? 'text-cyan-400' : 'text-zinc-500'}`} />
-                                  <span className="text-xs font-semibold text-zinc-200 truncate">{tool.displayName}</span>
+                                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isChecked ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`} />
+                                  <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{tool.displayName}</span>
                                 </div>
                                 <span
-                                  className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase shrink-0 ${
+                                  className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase shrink-0 font-medium ${
                                     tool.riskLevel === 'safe'
-                                      ? 'text-emerald-400 bg-emerald-500/10'
+                                      ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
                                       : tool.riskLevel === 'medium'
-                                      ? 'text-amber-400 bg-amber-500/10'
-                                      : 'text-rose-400 bg-rose-500/10'
+                                      ? 'text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                                      : 'text-rose-700 dark:text-rose-400 bg-rose-500/10'
                                   }`}
                                 >
                                   {tool.riskLevel}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-zinc-400 leading-snug line-clamp-2">
+                              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-snug line-clamp-2">
                                 {tool.description}
                               </p>
                               <div className="text-[10px] font-mono text-zinc-500 truncate mt-1">
@@ -773,19 +773,19 @@ export default function NewAgentPage() {
 
           {/* STEP 5: Knowledge Vault & RAG Documents */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   05
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-100">Knowledge Vault (RAG Grounding)</h2>
-                  <p className="text-[11px] text-zinc-400">
+                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Knowledge Vault (RAG Grounding)</h2>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                     Attach ingested documents and technical manuals for semantic vector search.
                   </p>
                 </div>
               </div>
-              <span className="text-[11px] font-mono text-cyan-400">
+              <span className="text-[11px] font-mono text-cyan-700 dark:text-cyan-400 font-semibold">
                 {selectedDocs.length} Attached
               </span>
             </div>
@@ -800,14 +800,14 @@ export default function NewAgentPage() {
                       onClick={() => handleDocToggle(doc.id)}
                       className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
                         isAttached
-                          ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200'
-                          : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-400 hover:border-zinc-700'
+                          ? 'bg-cyan-50/80 dark:bg-cyan-500/10 border-cyan-300 dark:border-cyan-500/40 text-cyan-950 dark:text-cyan-200 shadow-2xs'
+                          : 'bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                        <FileText className={`w-4 h-4 shrink-0 ${isAttached ? 'text-cyan-400' : 'text-zinc-500'}`} />
+                        <FileText className={`w-4 h-4 shrink-0 ${isAttached ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`} />
                         <div className="min-w-0">
-                          <span className="text-xs font-medium text-zinc-200 block truncate">{doc.name}</span>
+                          <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200 block truncate">{doc.name}</span>
                           <span className="text-[10px] font-mono text-zinc-500">
                             {doc.chunk_count || 12} vectors · {doc.file_type || 'PDF'}
                           </span>
@@ -815,7 +815,7 @@ export default function NewAgentPage() {
                       </div>
                       <span
                         className={`text-[10px] font-mono px-2 py-0.5 rounded shrink-0 ${
-                          isAttached ? 'bg-cyan-500/20 text-cyan-300 font-semibold' : 'bg-zinc-900 text-zinc-500'
+                          isAttached ? 'bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 font-semibold' : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-500'
                         }`}
                       >
                         {isAttached ? 'Attached' : 'Exclude'}
@@ -825,7 +825,7 @@ export default function NewAgentPage() {
                 })}
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono text-center">
+              <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950/60 border border-dashed border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 font-mono text-center">
                 No indexed documents in Knowledge Vault. Upload PDF manuals in Knowledge Vault anytime.
               </div>
             )}
@@ -833,27 +833,27 @@ export default function NewAgentPage() {
 
           {/* STEP 6: Safety Constraints & Execution Limits */}
           <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800/80 pb-3">
               <button
                 type="button"
                 onClick={() => setShowAdvanced(!showAdvanced)}
                 className="flex items-center gap-2 text-left cursor-pointer group"
               >
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-mono text-xs font-bold">
+                <div className="w-6 h-6 rounded-lg bg-cyan-50 dark:bg-cyan-500/15 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-center text-cyan-700 dark:text-cyan-400 font-mono text-xs font-bold">
                   06
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-100 group-hover:text-cyan-300 transition-colors">
+                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-cyan-600 dark:group-hover:text-cyan-300 transition-colors">
                     Safety Constraints & Resource Limits
                   </h2>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                     Defend against infinite loops and throttle concurrent thread consumption.
                   </p>
                 </div>
               </button>
               <ChevronDown
                 onClick={() => setShowAdvanced(!showAdvanced)}
-                className={`w-4 h-4 text-zinc-400 cursor-pointer transition-transform duration-200 ${
+                className={`w-4 h-4 text-zinc-500 dark:text-zinc-400 cursor-pointer transition-transform duration-200 ${
                   showAdvanced ? 'rotate-180' : ''
                 }`}
               />
@@ -862,7 +862,7 @@ export default function NewAgentPage() {
             {showAdvanced && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
-                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                     MAXIMUM EXECUTION TIMEOUT
                   </label>
                   <div className="relative flex items-center">
@@ -872,7 +872,7 @@ export default function NewAgentPage() {
                       max={120}
                       value={maxExecutionTime}
                       onChange={(e) => setMaxExecutionTime(Math.max(1, parseInt(e.target.value) || 15))}
-                      className="w-full px-3 py-2 pr-12 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                      className="w-full px-3 py-2 pr-12 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
                     />
                     <span className="absolute right-3 text-zinc-500 text-xs font-mono pointer-events-none">
                       min
@@ -882,7 +882,7 @@ export default function NewAgentPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                     MAXIMUM TOOL CALL BUDGET
                   </label>
                   <input
@@ -891,13 +891,13 @@ export default function NewAgentPage() {
                     max={200}
                     value={maxToolCalls}
                     onChange={(e) => setMaxToolCalls(Math.max(1, parseInt(e.target.value) || 40))}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
                   />
                   <span className="text-[10px] text-zinc-500 mt-0.5 block">Prevents runaway recursive tool invocations.</span>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                     CONCURRENCY THREADS
                   </label>
                   <input
@@ -906,13 +906,13 @@ export default function NewAgentPage() {
                     max={8}
                     value={concurrency}
                     onChange={(e) => setConcurrency(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
                   />
                   <span className="text-[10px] text-zinc-500 mt-0.5 block">Simultaneous runs allowed on queue.</span>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                     AUTOMATIC ERROR RETRIES
                   </label>
                   <input
@@ -921,7 +921,7 @@ export default function NewAgentPage() {
                     max={10}
                     value={retries}
                     onChange={(e) => setRetries(Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-xs focus:outline-none focus:border-cyan-500"
                   />
                   <span className="text-[10px] text-zinc-500 mt-0.5 block">Re-attempts before marking run as Failed.</span>
                 </div>
@@ -932,11 +932,11 @@ export default function NewAgentPage() {
 
         {/* RIGHT COLUMN: Sticky "Live Agent Blueprint" Review Card (4 cols) */}
         <div className="lg:col-span-4 sticky top-20 space-y-4">
-          <div className="glass-card p-5 space-y-4 border-cyan-500/20 shadow-xl shadow-cyan-950/20">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="glass-card p-5 space-y-4 border-cyan-500/20 shadow-xl shadow-cyan-900/5 dark:shadow-cyan-950/20">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
               <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-200">
+                <Shield className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider font-mono text-zinc-800 dark:text-zinc-200">
                   Agent Blueprint
                 </h3>
               </div>
@@ -944,102 +944,102 @@ export default function NewAgentPage() {
             </div>
 
             {/* Agent Preview Header */}
-            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2">
+            <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800/80 space-y-2 shadow-xs">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shrink-0">
                   <Bot className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-bold text-zinc-100 truncate">{name || 'Unnamed Agent'}</div>
-                  <div className="text-[10px] font-mono text-zinc-400">Trigger: {trigger.toUpperCase()}</div>
+                  <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{name || 'Unnamed Agent'}</div>
+                  <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">Trigger: {trigger.toUpperCase()}</div>
                 </div>
               </div>
-              <p className="text-[11px] text-zinc-400 line-clamp-2 italic">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 italic">
                 &ldquo;{description || 'No description provided'}&rdquo;
               </p>
             </div>
 
             {/* Model & Runtime Spec */}
             <div className="space-y-2 text-xs font-mono">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/50 border border-zinc-800/60">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/60">
                 <span className="text-zinc-500">ASSIGNED MODEL</span>
-                <span className="text-cyan-400 font-semibold truncate max-w-[160px]">
+                <span className="text-cyan-700 dark:text-cyan-400 font-semibold truncate max-w-[160px]">
                   {selectedModel ? selectedModel.name : 'None Selected'}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/50 border border-zinc-800/60">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/60">
                 <span className="text-zinc-500">TRIGGER CADENCE</span>
-                <span className="text-zinc-200 text-[11px] truncate max-w-[160px]">
+                <span className="text-zinc-800 dark:text-zinc-200 text-[11px] truncate max-w-[160px]">
                   {trigger === 'manual' ? 'On-Demand' : scheduleHumanSummary}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/50 border border-zinc-800/60">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/60">
                 <span className="text-zinc-500">ENABLED TOOLS</span>
-                <span className="text-emerald-400 font-semibold">
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                   {selectedTools.length} of {WORKBENCH_TOOLS.length}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/50 border border-zinc-800/60">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/60">
                 <span className="text-zinc-500">KNOWLEDGE DOCS</span>
-                <span className="text-zinc-200">
+                <span className="text-zinc-800 dark:text-zinc-200">
                   {selectedDocs.length} attached
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-950/50 border border-zinc-800/60">
+              <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800/60">
                 <span className="text-zinc-500">SAFETY LIMITS</span>
-                <span className="text-zinc-300 text-[11px]">
+                <span className="text-zinc-700 dark:text-zinc-300 text-[11px]">
                   {maxExecutionTime}m max · {maxToolCalls} tools
                 </span>
               </div>
             </div>
 
             {/* Readiness Checklist */}
-            <div className="space-y-2 pt-2 border-t border-zinc-800">
-              <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider block">
+            <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 uppercase tracking-wider block font-medium">
                 Readiness Verification
               </span>
               <div className="space-y-1.5 text-xs">
                 <div className="flex items-center gap-2">
                   <CheckCircle2
                     className={`w-3.5 h-3.5 ${
-                      validation.hasName ? 'text-emerald-400' : 'text-zinc-600'
+                      validation.hasName ? 'text-emerald-500 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-600'
                     }`}
                   />
-                  <span className={validation.hasName ? 'text-zinc-300' : 'text-zinc-600'}>
+                  <span className={validation.hasName ? 'text-zinc-800 dark:text-zinc-300 font-medium' : 'text-zinc-400 dark:text-zinc-600'}>
                     Agent designation specified
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2
                     className={`w-3.5 h-3.5 ${
-                      validation.hasInstructions ? 'text-emerald-400' : 'text-zinc-600'
+                      validation.hasInstructions ? 'text-emerald-500 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-600'
                     }`}
                   />
-                  <span className={validation.hasInstructions ? 'text-zinc-300' : 'text-zinc-600'}>
+                  <span className={validation.hasInstructions ? 'text-zinc-800 dark:text-zinc-300 font-medium' : 'text-zinc-400 dark:text-zinc-600'}>
                     System instructions formulated ({instructions.length} chars)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2
                     className={`w-3.5 h-3.5 ${
-                      validation.hasModel ? 'text-emerald-400' : 'text-zinc-600'
+                      validation.hasModel ? 'text-emerald-500 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-600'
                     }`}
                   />
-                  <span className={validation.hasModel ? 'text-zinc-300' : 'text-zinc-600'}>
+                  <span className={validation.hasModel ? 'text-zinc-800 dark:text-zinc-300 font-medium' : 'text-zinc-400 dark:text-zinc-600'}>
                     Local GGUF model assigned
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle2
                     className={`w-3.5 h-3.5 ${
-                      validation.hasTools ? 'text-emerald-400' : 'text-zinc-600'
+                      validation.hasTools ? 'text-emerald-500 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-600'
                     }`}
                   />
-                  <span className={validation.hasTools ? 'text-zinc-300' : 'text-zinc-600'}>
+                  <span className={validation.hasTools ? 'text-zinc-800 dark:text-zinc-300 font-medium' : 'text-zinc-400 dark:text-zinc-600'}>
                     At least one tool authorized
                   </span>
                 </div>

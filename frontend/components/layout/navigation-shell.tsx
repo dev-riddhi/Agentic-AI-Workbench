@@ -47,7 +47,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
   // Initial SSR mount & token resolution
   if (!isReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -61,7 +61,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
   // If on login/auth page
   if (isAuthPage) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         {tokenRefreshBar}
         {children}
       </div>
@@ -71,7 +71,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
   // If unauthenticated trying to access protected workspace
   if (!isAuthenticated && isProtected) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
         {tokenRefreshBar}
         <LoginPage />
       </div>
@@ -81,7 +81,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
   // If unmapped route (e.g. 404 page)
   if (!isProtected) {
     return (
-      <div className="min-h-screen bg-[#050508] text-zinc-100">
+      <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-[#050508] dark:text-zinc-100">
         {tokenRefreshBar}
         {children}
       </div>
@@ -92,7 +92,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
 
   // Authenticated user on protected workspace
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-950 text-zinc-100">
+    <div className="flex h-screen overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       {tokenRefreshBar}
       <Sidebar />
       <div className={`flex-1 flex flex-col min-w-0 ${isChatPage ? "overflow-hidden" : "overflow-y-auto"}`}>
@@ -101,7 +101,7 @@ export function NavigationShell({ children }: { children: React.ReactNode }) {
           className={
             isChatPage
               ? "flex-1 flex flex-col min-h-0 overflow-hidden"
-              : "flex-1 p-6 md:p-8 bg-zinc-950/60 max-w-7xl w-full mx-auto"
+              : "flex-1 p-6 md:p-8 bg-zinc-100/60 dark:bg-zinc-950/60 max-w-7xl w-full mx-auto"
           }
         >
           {children}

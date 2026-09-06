@@ -373,8 +373,8 @@ export default function AgentWorkspacePage({
     return (
       <div className="p-12 text-center rounded-2xl glass-card space-y-4 max-w-lg mx-auto mt-12">
         <AlertCircle className="w-12 h-12 text-rose-400 mx-auto" />
-        <h3 className="text-base font-bold text-zinc-100">Agent Not Found in Database</h3>
-        <p className="text-xs text-zinc-400 leading-relaxed">
+        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">Agent Not Found in Database</h3>
+        <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
           The requested agent UUID does not exist or has been decommissioned from the fleet.
         </p>
         <Link href="/agents">
@@ -395,30 +395,30 @@ export default function AgentWorkspacePage({
           <div className="flex items-start sm:items-center gap-3">
             <Link
               href="/agents"
-              className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition-colors shrink-0"
+              className="p-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors shrink-0 shadow-xs"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
 
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold text-zinc-100">{agent.name}</h1>
+                <h1 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">{agent.name}</h1>
                 <Badge variant={agent.is_running || isExecuting ? 'active' : 'offline'}>
                   {agent.is_running || isExecuting ? 'Worker Active' : 'Standby'}
                 </Badge>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/25">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/25">
                   {agent.model || agent.ai_model?.name || 'Local GGUF'}
                 </span>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 border border-zinc-700/80 capitalize">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700/80 capitalize">
                   {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
                 </span>
                 {agent.schedule && (
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 hidden sm:inline">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/25 hidden sm:inline">
                     {agent.schedule}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-zinc-400 mt-1 line-clamp-1 max-w-2xl">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 line-clamp-1 max-w-2xl">
                 {agent.description || 'Autonomous agent connected to local runtime.'}
               </p>
             </div>
@@ -456,15 +456,15 @@ export default function AgentWorkspacePage({
         </div>
 
         {/* Tab Switcher Bar */}
-        <div className="flex items-center justify-between border-t border-zinc-800/80 pt-3">
+        <div className="flex items-center justify-between border-t border-zinc-200 dark:border-zinc-800/80 pt-3">
           <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab('chat')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'chat'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               <Bot className="w-3.5 h-3.5" />
@@ -474,10 +474,10 @@ export default function AgentWorkspacePage({
             <button
               type="button"
               onClick={() => setActiveTab('config')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'config'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               <Settings className="w-3.5 h-3.5" />
@@ -487,10 +487,10 @@ export default function AgentWorkspacePage({
             <button
               type="button"
               onClick={() => setActiveTab('tools')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'tools'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               <Wrench className="w-3.5 h-3.5" />
@@ -500,10 +500,10 @@ export default function AgentWorkspacePage({
             <button
               type="button"
               onClick={() => setActiveTab('knowledge')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'knowledge'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
@@ -513,10 +513,10 @@ export default function AgentWorkspacePage({
             <button
               type="button"
               onClick={() => setActiveTab('logs')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
                 activeTab === 'logs'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
-                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
@@ -525,23 +525,22 @@ export default function AgentWorkspacePage({
           </div>
 
           <div className="hidden lg:flex items-center gap-3 text-[11px] font-mono text-zinc-500">
-            <span>Air-Gapped: <strong className="text-emerald-400">0.0 KB Egress</strong></span>
+            <span>Air-Gapped: <strong className="text-emerald-500 dark:text-emerald-400">0.0 KB Egress</strong></span>
             <span>·</span>
-            <span>Host: <strong className="text-zinc-300">127.0.0.1:8000</strong></span>
+            <span>Host: <strong className="text-zinc-700 dark:text-zinc-300">127.0.0.1:8000</strong></span>
           </div>
         </div>
       </div>
-
-      {/* TAB 1: MISSION FEED & LIVE EXECUTION STUDIO */}
+      {/* TAB 1: MISSION FEED & LIVE EXECUTION STUDIO */}
       {activeTab === 'chat' && (
         <div className="space-y-4">
           {/* Active Execution Pipeline Indicator */}
           {currentStep !== 'idle' && (
-            <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-cyan-500/30 flex items-center justify-between animate-in fade-in shadow-lg shadow-cyan-950/20">
+            <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 border border-cyan-300 dark:border-cyan-500/30 flex items-center justify-between animate-in fade-in shadow-lg shadow-cyan-900/5 dark:shadow-cyan-950/20">
               <div className="flex items-center gap-3">
-                <div className="w-4 h-4 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin shrink-0" />
+                <div className="w-4 h-4 rounded-full border-2 border-cyan-500 dark:border-cyan-400 border-t-transparent animate-spin shrink-0" />
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-mono font-bold text-cyan-400 uppercase">
+                  <span className="text-xs font-mono font-bold text-cyan-700 dark:text-cyan-400 uppercase">
                     PIPELINE ACTIVE:
                   </span>
                   <div className="flex items-center gap-2 text-xs font-mono">
@@ -557,14 +556,14 @@ export default function AgentWorkspacePage({
                           key={st.key}
                           className={`flex items-center gap-1 ${
                             isCurrent
-                              ? 'text-cyan-300 font-bold'
+                              ? 'text-cyan-800 dark:text-cyan-300 font-bold'
                               : isPassed
-                              ? 'text-emerald-400'
-                              : 'text-zinc-600'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-zinc-400 dark:text-zinc-600'
                           }`}
                         >
                           {isPassed ? '✓' : isCurrent ? '●' : '○'} {st.label}
-                          {i < STEP_STAGES.length - 1 && <span className="text-zinc-700">→</span>}
+                          {i < STEP_STAGES.length - 1 && <span className="text-zinc-300 dark:text-zinc-700">→</span>}
                         </span>
                       );
                     })}
@@ -595,7 +594,7 @@ export default function AgentWorkspacePage({
                   return (
                     <div
                       key={msg.id}
-                      className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-center text-xs text-zinc-400 font-mono"
+                      className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-600 dark:text-zinc-400 font-mono"
                     >
                       {msg.content}
                     </div>
@@ -612,7 +611,7 @@ export default function AgentWorkspacePage({
                       <span>•</span>
                       <span>{msg.timestamp}</span>
                       {msg.latencyMs !== undefined && (
-                        <span className="text-cyan-400/80">({msg.latencyMs}ms)</span>
+                        <span className="text-cyan-600 dark:text-cyan-400/80">({msg.latencyMs}ms)</span>
                       )}
                     </div>
 
@@ -620,7 +619,7 @@ export default function AgentWorkspacePage({
                       className={`max-w-2xl p-4 rounded-2xl text-xs sm:text-sm leading-relaxed relative group ${
                         isUser
                           ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-br-xs shadow-md shadow-cyan-950/30'
-                          : 'bg-zinc-900/90 text-zinc-100 border border-zinc-800 rounded-bl-xs'
+                          : 'bg-white dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-bl-xs shadow-sm'
                       }`}
                     >
                       <p className="whitespace-pre-wrap font-sans">{msg.content}</p>
@@ -629,11 +628,11 @@ export default function AgentWorkspacePage({
                       <button
                         type="button"
                         onClick={() => copyToClipboard(msg.content, msg.id)}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-zinc-950/60 hover:bg-zinc-950 text-zinc-400 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-950/60 dark:hover:bg-zinc-950 text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                         title="Copy text"
                       >
                         {copiedId === msg.id ? (
-                          <Check className="w-3 h-3 text-emerald-400" />
+                          <Check className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
                         ) : (
                           <Copy className="w-3 h-3" />
                         )}
@@ -641,8 +640,8 @@ export default function AgentWorkspacePage({
 
                       {/* Step-by-Step Tool Call Inspector Accordion */}
                       {msg.toolCalls && msg.toolCalls.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2">
-                          <div className="text-[10px] font-mono uppercase text-cyan-400 font-bold flex items-center justify-between">
+                        <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 space-y-2">
+                          <div className="text-[10px] font-mono uppercase text-cyan-700 dark:text-cyan-400 font-bold flex items-center justify-between">
                             <span className="flex items-center gap-1.5">
                               <Wrench className="w-3.5 h-3.5" />
                               Tool Traces ({msg.toolCalls.length} Invocations)
@@ -657,39 +656,39 @@ export default function AgentWorkspacePage({
                               return (
                                 <div
                                   key={idx}
-                                  className="rounded-xl bg-zinc-950/80 border border-zinc-800/90 overflow-hidden text-xs font-mono"
+                                  className="rounded-xl bg-zinc-50 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800/90 overflow-hidden text-xs font-mono"
                                 >
                                   <button
                                     type="button"
                                     onClick={() => toggleToolCallAccordion(accordionKey)}
-                                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                                    className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-zinc-100/70 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                                      <span className="text-zinc-200 font-semibold">
+                                      <Terminal className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                                      <span className="text-zinc-800 dark:text-zinc-200 font-semibold">
                                         {tc.name || 'tool_invocation'}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded font-medium">
                                         Status: OK
                                       </span>
                                       {isExpanded ? (
-                                        <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                                        <ChevronDown className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                                       ) : (
-                                        <ChevronRight className="w-3.5 h-3.5 text-zinc-400" />
+                                        <ChevronRight className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                                       )}
                                     </div>
                                   </button>
 
                                   {isExpanded && (
-                                    <div className="p-3 border-t border-zinc-800/80 space-y-2 bg-zinc-950">
+                                    <div className="p-3 border-t border-zinc-200 dark:border-zinc-800/80 space-y-2 bg-white dark:bg-zinc-950">
                                       {tc.arguments && (
                                         <div>
                                           <span className="text-[10px] uppercase text-zinc-500 block mb-0.5">
                                             Arguments:
                                           </span>
-                                          <pre className="p-2 rounded-lg bg-zinc-900 text-zinc-300 text-[11px] overflow-x-auto">
+                                          <pre className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-300 text-[11px] overflow-x-auto border border-zinc-200 dark:border-zinc-800">
                                             {JSON.stringify(tc.arguments, null, 2)}
                                           </pre>
                                         </div>
@@ -699,7 +698,7 @@ export default function AgentWorkspacePage({
                                           <span className="text-[10px] uppercase text-zinc-500 block mb-0.5">
                                             Result Output:
                                           </span>
-                                          <pre className="p-2 rounded-lg bg-zinc-900 text-emerald-300 text-[11px] overflow-x-auto whitespace-pre-wrap">
+                                          <pre className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900 text-emerald-700 dark:text-emerald-300 text-[11px] overflow-x-auto whitespace-pre-wrap border border-zinc-200 dark:border-zinc-800">
                                             {typeof tc.result === 'object'
                                               ? JSON.stringify(tc.result, null, 2)
                                               : String(tc.result)}
@@ -721,7 +720,7 @@ export default function AgentWorkspacePage({
             </div>
 
             {/* Input Bar with Ctrl+Enter shortcut */}
-            <form onSubmit={handleSendPrompt} className="pt-4 border-t border-zinc-800/80">
+            <form onSubmit={handleSendPrompt} className="pt-4 border-t border-zinc-200 dark:border-zinc-800/80">
               <div className="relative flex flex-col gap-2">
                 <textarea
                   rows={3}
@@ -730,7 +729,7 @@ export default function AgentWorkspacePage({
                   onKeyDown={handleKeyDown}
                   disabled={isExecuting}
                   placeholder="Dispatch instructions or diagnostic query (Press Ctrl+Enter to send)..."
-                  className="w-full p-3.5 pr-24 rounded-xl bg-zinc-950 border border-zinc-800 text-xs sm:text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans transition-colors resize-none disabled:opacity-50"
+                  className="w-full p-3.5 pr-24 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans transition-colors resize-none disabled:opacity-50"
                 />
 
                 <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
@@ -770,15 +769,15 @@ export default function AgentWorkspacePage({
       {/* TAB 2: INLINE AGENT CONFIGURATION */}
       {activeTab === 'config' && (
         <form onSubmit={handleSaveConfig} className="glass-card p-6 space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-100">Inline Agent Reconfiguration</h2>
-              <p className="text-xs text-zinc-400">
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Inline Agent Reconfiguration</h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Modify persona, system directives, assigned GGUF weights, or safety constraints.
               </p>
             </div>
             {configSaveSuccess && (
-              <span className="text-xs font-mono text-emerald-400 flex items-center gap-1.5">
+              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
                 <Check className="w-4 h-4" /> Parameters Persisted
               </span>
             )}
@@ -786,7 +785,7 @@ export default function AgentWorkspacePage({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+              <label className="block text-xs font-mono font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                 Agent Designation
               </label>
               <input
@@ -794,25 +793,25 @@ export default function AgentWorkspacePage({
                 required
                 value={configName}
                 onChange={(e) => setConfigName(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-xs font-mono font-semibold text-zinc-400 uppercase">
+              <label className="block text-xs font-mono font-semibold text-zinc-600 dark:text-zinc-400 uppercase">
                 Mission Description
               </label>
               <input
                 type="text"
                 value={configDesc}
                 onChange={(e) => setConfigDesc(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500"
+                className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
               <div className="flex items-center justify-between">
-                <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                <label className="block text-xs font-mono font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                   System Instructions & Reasoning Directives
                 </label>
                 <span className="text-[10px] font-mono text-zinc-500">{configInstructions.length} chars</span>
@@ -822,18 +821,18 @@ export default function AgentWorkspacePage({
                 required
                 value={configInstructions}
                 onChange={(e) => setConfigInstructions(e.target.value)}
-                className="w-full p-3.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono leading-relaxed focus:outline-none focus:border-cyan-500"
+                className="w-full p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono leading-relaxed focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+              <label className="block text-xs font-mono font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                 Target GGUF Model Runtime
               </label>
               <select
                 value={configModelId}
                 onChange={(e) => setConfigModelId(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer transition-colors"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -845,7 +844,7 @@ export default function AgentWorkspacePage({
 
             {/* Trigger Mode */}
             <div className="space-y-1.5 sm:col-span-2 pt-2">
-              <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+              <label className="block text-xs font-mono font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                 Execution Trigger Mode
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -856,8 +855,8 @@ export default function AgentWorkspacePage({
                     onClick={() => setConfigTrigger(t)}
                     className={`px-3.5 py-2.5 rounded-xl text-xs font-mono capitalize border transition-all cursor-pointer text-left ${
                       configTrigger === t
-                        ? 'bg-cyan-500/15 text-cyan-200 border-cyan-500/50 font-bold'
-                        : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:border-zinc-700'
+                        ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-500/50 font-bold shadow-xs'
+                        : 'bg-white dark:bg-zinc-950 text-zinc-700 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                     }`}
                   >
                     <div className="font-bold">{t === 'onetime' ? 'one-time' : t}</div>
@@ -871,7 +870,7 @@ export default function AgentWorkspacePage({
 
             {(configTrigger === 'schedule' || configTrigger === 'onetime') && (
               <div className="space-y-1.5 sm:col-span-2">
-                <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase">
+                <label className="block text-xs font-mono font-semibold text-zinc-700 dark:text-zinc-300 uppercase">
                   Schedule Expression
                 </label>
                 <input
@@ -879,20 +878,20 @@ export default function AgentWorkspacePage({
                   value={configSchedule}
                   onChange={(e) => setConfigSchedule(e.target.value)}
                   placeholder={configTrigger === 'schedule' ? 'e.g. Every 1 day at 09:00' : 'e.g. Once on 2026-09-10 at 09:00'}
-                  className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
             )}
           </div>
 
           {/* Safety Constraints & Execution Limits */}
-          <div className="pt-4 border-t border-zinc-800 space-y-4">
-            <h3 className="text-xs font-bold text-zinc-200 font-mono uppercase">
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
+            <h3 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 font-mono uppercase">
               Safety Constraints & Resource Limits
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                   MAXIMUM EXECUTION TIMEOUT (MIN)
                 </label>
                 <input
@@ -901,11 +900,11 @@ export default function AgentWorkspacePage({
                   max={120}
                   value={configMaxExecutionTime}
                   onChange={(e) => setConfigMaxExecutionTime(parseInt(e.target.value) || 15)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                   MAXIMUM TOOL CALL BUDGET
                 </label>
                 <input
@@ -914,11 +913,11 @@ export default function AgentWorkspacePage({
                   max={200}
                   value={configMaxToolCalls}
                   onChange={(e) => setConfigMaxToolCalls(parseInt(e.target.value) || 40)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                   CONCURRENCY THREADS
                 </label>
                 <input
@@ -927,11 +926,11 @@ export default function AgentWorkspacePage({
                   max={8}
                   value={configConcurrency}
                   onChange={(e) => setConfigConcurrency(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                <label className="block text-[11px] font-mono text-zinc-600 dark:text-zinc-400 mb-1">
                   AUTOMATIC RETRIES
                 </label>
                 <input
@@ -940,13 +939,13 @@ export default function AgentWorkspacePage({
                   max={10}
                   value={configRetries}
                   onChange={(e) => setConfigRetries(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-zinc-800 flex justify-end">
+          <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
             <Button
               variant="primary"
               size="md"
@@ -972,10 +971,10 @@ export default function AgentWorkspacePage({
       {/* TAB 3: 19-TOOL PERMISSION MATRIX */}
       {activeTab === 'tools' && (
         <div className="glass-card p-6 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-100">Tool Permissions Matrix</h2>
-              <p className="text-xs text-zinc-400">
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Tool Permissions Matrix</h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Grant or revoke deterministic execution capabilities for this agent.
               </p>
             </div>
@@ -991,10 +990,10 @@ export default function AgentWorkspacePage({
             <button
               type="button"
               onClick={() => setActiveToolCategory('all')}
-              className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
                 activeToolCategory === 'all'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                  : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40 font-semibold'
+                  : 'bg-white dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800'
               }`}
             >
               All Categories
@@ -1004,10 +1003,10 @@ export default function AgentWorkspacePage({
                 key={cat.id}
                 type="button"
                 onClick={() => setActiveToolCategory(cat.id)}
-                className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors ${
+                className={`px-3 py-1 rounded-lg text-xs font-mono transition-colors cursor-pointer ${
                   activeToolCategory === cat.id
-                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                    : 'bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+                    ? 'bg-cyan-50 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/40 font-semibold'
+                    : 'bg-white dark:bg-zinc-900/80 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800'
                 }`}
               >
                 {cat.title}
@@ -1029,15 +1028,15 @@ export default function AgentWorkspacePage({
                   onClick={() => handleToggleTool(tool.name)}
                   className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 select-none ${
                     hasTool
-                      ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-200 shadow-sm shadow-cyan-500/5'
-                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                      ? 'bg-cyan-50/80 dark:bg-cyan-500/10 border-cyan-300 dark:border-cyan-500/40 text-cyan-950 dark:text-cyan-200 shadow-xs'
+                      : 'bg-white dark:bg-zinc-950/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
                   }`}
                 >
                   <div
                     className={`w-4 h-4 mt-0.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
                       hasTool
                         ? 'bg-cyan-500 border-cyan-500 text-zinc-950'
-                        : 'border-zinc-700 bg-zinc-950 text-transparent'
+                        : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950 text-transparent'
                     }`}
                   >
                     <Check className="w-3 h-3 stroke-[3]" />
@@ -1046,22 +1045,22 @@ export default function AgentWorkspacePage({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <div className="flex items-center gap-1.5 truncate">
-                        <Icon className={`w-3.5 h-3.5 shrink-0 ${hasTool ? 'text-cyan-400' : 'text-zinc-500'}`} />
-                        <span className="font-mono font-bold text-xs text-zinc-200 truncate">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${hasTool ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`} />
+                        <span className="font-mono font-bold text-xs text-zinc-800 dark:text-zinc-200 truncate">
                           {tool.displayName}
                         </span>
                       </div>
                       <span
                         className={`text-[9px] font-mono px-1.5 py-0.2 rounded uppercase shrink-0 ${
                           hasTool
-                            ? 'bg-emerald-500/20 text-emerald-400'
-                            : 'bg-zinc-800 text-zinc-500'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold'
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-500'
                         }`}
                       >
                         {hasTool ? 'Granted' : 'Revoked'}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                       {tool.description}
                     </p>
                     <div className="text-[10px] font-mono text-zinc-500 truncate mt-1">
@@ -1078,15 +1077,15 @@ export default function AgentWorkspacePage({
       {/* TAB 4: KNOWLEDGE ATTACHMENTS */}
       {activeTab === 'knowledge' && (
         <div className="glass-card p-6 space-y-6">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-100">Attached Knowledge Documents</h2>
-              <p className="text-xs text-zinc-400">
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Attached Knowledge Documents</h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Indexed technical manuals and files accessible for semantic RAG vector retrieval.
               </p>
             </div>
             <Link href="/documents">
-              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-cyan-400">
+              <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-cyan-600 dark:text-cyan-400">
                 <span>Knowledge Vault</span>
                 <ExternalLink className="w-3 h-3" />
               </Button>
@@ -1099,14 +1098,14 @@ export default function AgentWorkspacePage({
                 {agent.documents.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center justify-between p-3.5 rounded-xl bg-zinc-950 border border-zinc-800"
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xs"
                   >
                     <div className="flex items-center gap-3 min-w-0 pr-2">
-                      <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 shrink-0">
+                      <div className="p-2 rounded-lg bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shrink-0">
                         <FileText className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-zinc-200 truncate">{doc.name}</div>
+                        <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">{doc.name}</div>
                         <div className="text-[10px] text-zinc-500 font-mono">
                           {doc.mime_type || 'PDF Document'} · {doc.chunk_count || 12} vectors
                         </div>
@@ -1116,7 +1115,7 @@ export default function AgentWorkspacePage({
                     <button
                       type="button"
                       onClick={() => handleUnlinkDoc(doc.id, doc.name)}
-                      className="px-2.5 py-1 rounded-lg text-xs font-mono text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                      className="px-2.5 py-1 rounded-lg text-xs font-mono text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                     >
                       Unlink
                     </button>
@@ -1124,15 +1123,15 @@ export default function AgentWorkspacePage({
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono">
+              <div className="p-8 text-center rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border border-dashed border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 font-mono">
                 No documents currently attached to this agent. Attach an ingested file below.
               </div>
             )}
           </div>
 
           {/* Attach from Vault */}
-          <div className="pt-4 border-t border-zinc-800 space-y-3">
-            <h3 className="text-xs font-bold font-mono text-zinc-400 uppercase">
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+            <h3 className="text-xs font-bold font-mono text-zinc-700 dark:text-zinc-400 uppercase">
               Available in Knowledge Vault
             </h3>
             {allDocs.filter((d) => !agent.documents?.some((ad) => ad.id === d.id)).length === 0 ? (
@@ -1146,10 +1145,10 @@ export default function AgentWorkspacePage({
                   .map((d) => (
                     <div
                       key={d.id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 text-xs"
+                      className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80 text-xs shadow-xs"
                     >
                       <div className="min-w-0 pr-2">
-                        <span className="truncate text-zinc-300 block">{d.name}</span>
+                        <span className="truncate text-zinc-800 dark:text-zinc-300 block font-medium">{d.name}</span>
                         <span className="text-[10px] font-mono text-zinc-500">{d.file_type || 'PDF'}</span>
                       </div>
                       <Button
@@ -1171,10 +1170,10 @@ export default function AgentWorkspacePage({
       {/* TAB 5: EXECUTION AUDIT RUNS */}
       {activeTab === 'logs' && (
         <div className="glass-card p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+          <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-100">Live Execution Audit Trail</h2>
-              <p className="text-xs text-zinc-400">
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Live Execution Audit Trail</h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Cryptographic audit log of real tasks dispatched to this agent on the backend runtime.
               </p>
             </div>
@@ -1182,7 +1181,7 @@ export default function AgentWorkspacePage({
           </div>
 
           {executionLogs.length === 0 ? (
-            <div className="p-10 text-center rounded-xl bg-zinc-950/40 border border-dashed border-zinc-800 text-xs text-zinc-500 font-mono">
+            <div className="p-10 text-center rounded-xl bg-zinc-50 dark:bg-zinc-950/40 border border-dashed border-zinc-200 dark:border-zinc-800 text-xs text-zinc-500 font-mono">
               No executions logged during this session yet. Dispatch a task in the Mission Feed to record execution traces.
             </div>
           ) : (
@@ -1190,12 +1189,12 @@ export default function AgentWorkspacePage({
               {executionLogs.map((log) => (
                 <div
                   key={log.execution_id}
-                  className="p-4 rounded-xl bg-zinc-950 border border-zinc-800/80 text-xs font-mono space-y-3"
+                  className="p-4 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 text-xs font-mono space-y-3 shadow-xs"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                    <span className="text-cyan-400 font-bold">EXECUTION ID: {log.execution_id}</span>
+                    <span className="text-cyan-700 dark:text-cyan-400 font-bold">EXECUTION ID: {log.execution_id}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">
                         ● {log.status}
                       </span>
                       <span className="text-zinc-500">
@@ -1204,18 +1203,18 @@ export default function AgentWorkspacePage({
                     </div>
                   </div>
 
-                  <div className="text-zinc-300 font-sans text-xs bg-zinc-900/70 p-3 rounded-lg border border-zinc-800/60 whitespace-pre-wrap">
+                  <div className="text-zinc-800 dark:text-zinc-300 font-sans text-xs bg-zinc-50 dark:bg-zinc-900/70 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800/60 whitespace-pre-wrap">
                     {log.response}
                   </div>
 
                   {log.tool_calls && log.tool_calls.length > 0 && (
-                    <div className="text-[11px] text-zinc-400 space-y-1">
+                    <div className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-1">
                       <span className="text-zinc-500 uppercase text-[10px]">Tools Triggered:</span>
                       <div className="flex flex-wrap gap-1.5">
                         {log.tool_calls.map((tc, idx) => (
                           <span
                             key={idx}
-                            className="px-2 py-0.5 rounded bg-zinc-900 text-cyan-300 border border-zinc-800"
+                            className="px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 text-cyan-700 dark:text-cyan-300 border border-zinc-200 dark:border-zinc-800"
                           >
                             {tc.name}
                           </span>

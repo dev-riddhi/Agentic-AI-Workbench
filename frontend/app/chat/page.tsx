@@ -27,6 +27,7 @@ import { modelsApi } from '@/lib/api/models';
 import { runtimeApi } from '@/lib/api/runtime';
 import { AIModelResponse, ModelRuntimeStatus } from '@/lib/api/types';
 import { useToast } from '@/context/toast-context';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const QUICK_STARTERS = [
   {
@@ -60,8 +61,8 @@ function ChatContent() {
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [runtimeStatus, setRuntimeStatus] = useState<ModelRuntimeStatus | null>(null);
 
-  // Layout states
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // Layout states (closed by default)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Loading states
   const [isLoadingList, setIsLoadingList] = useState(true);
@@ -384,26 +385,26 @@ function ChatContent() {
   const selectedModel = models.find((m) => m.id === selectedModelId);
 
   return (
-    <div className="flex-1 flex min-h-0 w-full h-full overflow-hidden bg-zinc-950 select-none">
+    <div className="flex-1 flex min-h-0 w-full h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 select-none">
       {/* LEFT SIDEBAR: THREAD HISTORY (COLLAPSIBLE) */}
       <aside
-        className={`h-full bg-zinc-950 flex flex-col shrink-0 min-h-0 transition-all duration-200 ease-in-out ${
-          isSidebarOpen ? 'w-80 border-r border-zinc-800/80' : 'w-0 border-r-0 overflow-hidden'
+        className={`h-full bg-white dark:bg-zinc-950 flex flex-col shrink-0 min-h-0 transition-all duration-200 ease-in-out ${
+          isSidebarOpen ? 'w-80 border-r border-zinc-200/80 dark:border-zinc-800/80' : 'w-0 border-r-0 overflow-hidden'
         }`}
       >
         {isSidebarOpen && (
           <div className="flex flex-col h-full min-h-0">
             {/* Sidebar Top Header */}
-            <div className="p-3.5 border-b border-zinc-800 space-y-2.5 shrink-0">
+            <div className="p-3.5 border-b border-zinc-200 dark:border-zinc-800 space-y-2.5 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
-                    <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
+                    <MessageSquare className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
                   </div>
-                  <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
                     Conversations
                   </span>
-                  <span className="text-[10px] font-mono text-zinc-500 px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                  <span className="text-[10px] font-mono text-zinc-500 px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
                     {conversations.length}
                   </span>
                 </div>
@@ -411,7 +412,7 @@ function ChatContent() {
                 <button
                   type="button"
                   onClick={() => setIsSidebarOpen(false)}
-                  className="p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
+                  className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-900 rounded-md transition-colors cursor-pointer"
                   title="Collapse Sidebar"
                 >
                   <PanelLeftClose className="w-4 h-4" />
@@ -431,13 +432,13 @@ function ChatContent() {
 
               {/* Search Filter */}
               <div className="relative">
-                <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Filter threads..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-zinc-900/80 border border-zinc-800 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500/50"
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-cyan-500/50"
                 />
               </div>
             </div>
@@ -446,15 +447,15 @@ function ChatContent() {
             <div className="flex-1 overflow-y-auto min-h-0 p-2 space-y-1">
               {isLoadingList ? (
                 <div className="p-8 text-center text-xs text-zinc-500 flex flex-col items-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-400" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-500" />
                   <span>Loading chat history...</span>
                 </div>
               ) : filteredConversations.length === 0 ? (
-                <div className="p-8 text-center text-xs text-zinc-600 space-y-2">
-                  <MessageSquare className="w-6 h-6 mx-auto opacity-30 text-zinc-500" />
+                <div className="p-8 text-center text-xs text-zinc-500 space-y-2">
+                  <MessageSquare className="w-6 h-6 mx-auto opacity-30 text-zinc-400" />
                   <p>No conversations found.</p>
                   {models.length > 0 && (
-                    <p className="text-[11px] text-zinc-500">Click &ldquo;New Conversation&rdquo; to start.</p>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Click &ldquo;New Conversation&rdquo; to start.</p>
                   )}
                 </div>
               ) : (
@@ -466,8 +467,8 @@ function ChatContent() {
                       onClick={() => loadConversation(conv.id)}
                       className={`group relative p-2.5 rounded-xl cursor-pointer transition-all text-left ${
                         isActive
-                          ? 'bg-zinc-900 border border-cyan-500/30 text-zinc-100 shadow-sm shadow-cyan-500/5'
-                          : 'hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 border border-transparent'
+                          ? 'bg-cyan-50/80 dark:bg-zinc-900 border border-cyan-400/40 dark:border-cyan-500/30 text-zinc-900 dark:text-zinc-100 shadow-sm shadow-cyan-500/5'
+                          : 'hover:bg-zinc-100 dark:hover:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-transparent'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
@@ -477,7 +478,7 @@ function ChatContent() {
                         <button
                           type="button"
                           onClick={(e) => handleDeleteConversation(e, conv.id, conv.title)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 rounded transition-opacity cursor-pointer shrink-0"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-rose-500 rounded transition-opacity cursor-pointer shrink-0"
                           title="Delete thread"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -490,8 +491,8 @@ function ChatContent() {
                         </p>
                       )}
 
-                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-zinc-800/40 text-[10px] text-zinc-500 font-mono">
-                        <span className="truncate max-w-[120px] text-cyan-400/80">
+                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-zinc-200 dark:border-zinc-800/40 text-[10px] text-zinc-500 font-mono">
+                        <span className="truncate max-w-[120px] text-cyan-600 dark:text-cyan-400/80">
                           {conv.model_name || 'Model'}
                         </span>
                         <span>{conv.message_count} msgs</span>
@@ -503,14 +504,14 @@ function ChatContent() {
             </div>
 
             {/* Sidebar Bottom Footer */}
-            <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/80 shrink-0 flex items-center justify-between text-[11px] text-zinc-400">
+            <div className="p-3 border-t border-zinc-200 dark:border-zinc-800/80 bg-zinc-50/80 dark:bg-zinc-950/80 shrink-0 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
               <span className="flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                <Cpu className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
                 <span>{models.length} Models Available</span>
               </span>
               <Link
                 href="/models"
-                className="text-cyan-400 hover:underline flex items-center gap-0.5"
+                className="text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-0.5"
               >
                 <span>Hub &rarr;</span>
               </Link>
@@ -520,32 +521,32 @@ function ChatContent() {
       </aside>
 
       {/* RIGHT MAIN AREA: ACTIVE CHAT PANE */}
-      <section className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden bg-zinc-950/40 relative">
+      <section className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden bg-zinc-100/50 dark:bg-zinc-950/40 relative">
         {/* TOP SUB-HEADER BAR */}
-        <div className="h-14 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-4 md:px-6 flex items-center justify-between shrink-0 z-10">
+        <div className="h-14 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md px-4 md:px-6 flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
             {/* Sidebar Expand Button (when collapsed) */}
             {!isSidebarOpen && (
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+                className="p-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0 shadow-sm"
                 title="Open Conversation Sidebar"
               >
-                <PanelLeftOpen className="w-4 h-4 text-cyan-400" />
+                <PanelLeftOpen className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
               </button>
             )}
 
             {/* Model Selector Dropdown */}
             <div className="flex items-center gap-2 min-w-0">
-              <label className="text-[10px] font-mono text-zinc-400 hidden sm:inline uppercase tracking-wider shrink-0">
+              <label className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 hidden sm:inline uppercase tracking-wider shrink-0">
                 Target Model:
               </label>
               <div className="relative shrink-0">
                 <select
                   value={selectedModelId}
                   onChange={(e) => setSelectedModelId(e.target.value)}
-                  className="bg-zinc-900 border border-zinc-700/70 text-zinc-200 text-xs rounded-lg px-2.5 py-1.5 pr-7 appearance-none focus:outline-none focus:border-cyan-500 font-sans cursor-pointer max-w-[200px] sm:max-w-[260px] truncate"
+                  className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700/70 text-zinc-800 dark:text-zinc-200 text-xs rounded-lg px-2.5 py-1.5 pr-7 appearance-none focus:outline-none focus:border-cyan-500 font-sans cursor-pointer max-w-[200px] sm:max-w-[260px] truncate shadow-sm"
                 >
                   {models.length === 0 ? (
                     <option value="">No models installed</option>
@@ -562,29 +563,29 @@ function ChatContent() {
             </div>
 
             {/* Model Server Readiness Badge */}
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] shrink-0">
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] shrink-0 shadow-sm">
               {runtimeStatus?.ready ? (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-emerald-300 font-medium">Server Ready</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-emerald-700 dark:text-emerald-300 font-medium">Server Ready</span>
                 </>
               ) : runtimeStatus?.running ? (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-amber-300 font-medium">Loading Weights...</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="text-amber-700 dark:text-amber-300 font-medium">Loading Weights...</span>
                 </>
               ) : (
                 <>
-                  <span className="w-2 h-2 rounded-full bg-zinc-500" />
-                  <span className="text-zinc-400">Standby</span>
+                  <span className="w-2 h-2 rounded-full bg-zinc-400 dark:bg-zinc-500" />
+                  <span className="text-zinc-500 dark:text-zinc-400">Standby</span>
                 </>
               )}
             </div>
 
             {/* Live Streaming Indicator Chip */}
             {isSending && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-950/70 border border-cyan-500/40 text-[11px] text-cyan-300 font-medium shrink-0 animate-pulse shadow-sm shadow-cyan-500/20">
-                <Zap className="w-3 h-3 text-cyan-400" />
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-50 dark:bg-cyan-950/70 border border-cyan-300 dark:border-cyan-500/40 text-[11px] text-cyan-700 dark:text-cyan-300 font-medium shrink-0 animate-pulse shadow-sm shadow-cyan-500/20">
+                <Zap className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
                 <span>Streaming...</span>
               </div>
             )}
@@ -597,34 +598,36 @@ function ChatContent() {
               onClick={() => setShowConfig(!showConfig)}
               className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
                 showConfig
-                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30 font-medium'
-                  : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/20 text-cyan-800 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/30 font-medium'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 shadow-sm'
               }`}
               title="Toggle inference parameters"
             >
-              <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+              <Sliders className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
               <span className="hidden sm:inline">Parameters</span>
             </button>
 
             <Link
               href="/runtime"
-              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 text-xs flex items-center gap-1.5 transition-colors"
+              className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 text-xs flex items-center gap-1.5 transition-colors shadow-sm"
               title="Open Runtime Dashboard"
             >
-              <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+              <Terminal className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
               <span className="hidden sm:inline">Telemetry</span>
             </Link>
+
+            <ThemeToggle />
           </div>
         </div>
 
         {/* COLLAPSIBLE GENERATION CONFIG DRAWER */}
         {showConfig && (
-          <div className="p-4 bg-zinc-900/95 border-b border-zinc-800 text-xs space-y-3 animate-in slide-in-from-top-2 duration-150 shrink-0">
+          <div className="p-4 bg-white/95 dark:bg-zinc-900/95 border-b border-zinc-200 dark:border-zinc-800 text-xs space-y-3 animate-in slide-in-from-top-2 duration-150 shrink-0 shadow-md">
             <div className="max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <div className="flex justify-between text-zinc-400 mb-1">
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400 mb-1">
                   <span>Temperature:</span>
-                  <span className="font-mono text-cyan-400 font-bold">{temperature}</span>
+                  <span className="font-mono text-cyan-600 dark:text-cyan-400 font-bold">{temperature}</span>
                 </div>
                 <input
                   type="range"
@@ -638,9 +641,9 @@ function ChatContent() {
               </div>
 
               <div>
-                <div className="flex justify-between text-zinc-400 mb-1">
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400 mb-1">
                   <span>Max Tokens:</span>
-                  <span className="font-mono text-cyan-400 font-bold">{maxTokens}</span>
+                  <span className="font-mono text-cyan-600 dark:text-cyan-400 font-bold">{maxTokens}</span>
                 </div>
                 <input
                   type="range"
@@ -654,13 +657,13 @@ function ChatContent() {
               </div>
 
               <div>
-                <label className="block text-zinc-400 mb-1">System Instructions:</label>
+                <label className="block text-zinc-500 dark:text-zinc-400 mb-1">System Instructions:</label>
                 <input
                   type="text"
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="You are a helpful assistant..."
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs focus:outline-none focus:border-cyan-500"
                 />
               </div>
             </div>
@@ -680,14 +683,14 @@ function ChatContent() {
             /* EMPTY STATE: QUICK STARTERS */
             <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6 select-text">
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center shadow-lg shadow-cyan-500/10">
-                <Sparkles className="w-8 h-8 text-cyan-400 animate-pulse" />
+                <Sparkles className="w-8 h-8 text-cyan-500 dark:text-cyan-400 animate-pulse" />
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-base md:text-lg font-bold text-zinc-100">
+                <h2 className="text-base md:text-lg font-bold text-zinc-900 dark:text-zinc-100">
                   {currentConv?.title || (selectedModel ? `Chat with ${selectedModel.name}` : 'Local AI Model Chat')}
                 </h2>
-                <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto leading-relaxed">
                   Direct reasoning session with local weights. Fully air-gapped, zero external network calls.
                 </p>
               </div>
@@ -705,13 +708,13 @@ function ChatContent() {
                         handleStartNewChat(item.prompt);
                       }
                     }}
-                    className="p-3.5 rounded-xl bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 hover:border-cyan-500/30 transition-all text-left space-y-1 group cursor-pointer"
+                    className="p-3.5 rounded-xl bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-200/90 dark:border-zinc-800 hover:border-cyan-400/50 dark:hover:border-cyan-500/30 transition-all text-left space-y-1 group cursor-pointer shadow-sm"
                   >
-                    <div className="text-xs font-semibold text-zinc-200 group-hover:text-cyan-300 flex items-center justify-between">
+                    <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-cyan-600 dark:group-hover:text-cyan-300 flex items-center justify-between">
                       <span>{item.title}</span>
-                      <span className="opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400">&rarr;</span>
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity text-cyan-600 dark:text-cyan-400">&rarr;</span>
                     </div>
-                    <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                       {item.prompt}
                     </p>
                   </button>
@@ -734,7 +737,7 @@ function ChatContent() {
                     <div
                       className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center border shadow-sm ${
                         isUser
-                          ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
+                          ? 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200'
                           : 'bg-gradient-to-tr from-cyan-600 to-blue-600 border-cyan-400/40 text-white'
                       }`}
                     >
@@ -745,16 +748,16 @@ function ChatContent() {
                     <div
                       className={`rounded-2xl px-4 py-3 max-w-[85%] text-xs leading-relaxed space-y-1.5 shadow-sm ${
                         isUser
-                          ? 'bg-cyan-600/10 border border-cyan-500/25 text-zinc-100 rounded-tr-xs'
-                          : 'bg-zinc-900/90 border border-zinc-800 text-zinc-200 rounded-tl-xs'
+                          ? 'bg-cyan-50 dark:bg-cyan-600/10 border border-cyan-200 dark:border-cyan-500/25 text-zinc-900 dark:text-zinc-100 rounded-tr-xs'
+                          : 'bg-white dark:bg-zinc-900/90 border border-zinc-200/90 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-tl-xs'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-zinc-500 mb-0.5">
-                        <span className="font-semibold text-zinc-400 uppercase tracking-wider">
+                        <span className="font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                           {isUser ? 'You' : currentConv.model_name || 'AI Assistant'}
                         </span>
                         {msg.latency_ms && (
-                          <span className="text-cyan-400 flex items-center gap-0.5 font-mono text-[10px]">
+                          <span className="text-cyan-600 dark:text-cyan-400 flex items-center gap-0.5 font-mono text-[10px]">
                             <Zap className="w-2.5 h-2.5" />
                             {msg.latency_ms}ms
                           </span>
@@ -763,25 +766,25 @@ function ChatContent() {
 
                       {/* Message Content */}
                       {!msg.content && isSending && idx === currentConv.messages.length - 1 ? (
-                        <div className="flex items-center gap-2 py-1 text-zinc-400 text-xs">
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                          <span className="text-zinc-400 font-mono text-[11px] ml-1">Synthesizing response...</span>
+                        <div className="flex items-center gap-2 py-1 text-zinc-500 dark:text-zinc-400 text-xs">
+                          <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                          <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px] ml-1">Synthesizing response...</span>
                         </div>
                       ) : (
-                        <div className="whitespace-pre-wrap font-sans text-zinc-100 selection:bg-cyan-500/30">
+                        <div className="whitespace-pre-wrap font-sans text-zinc-900 dark:text-zinc-100 selection:bg-cyan-500/30">
                           {msg.content}
                           {isSending && idx === currentConv.messages.length - 1 && (
-                            <span className="inline-block w-1.5 h-3.5 bg-cyan-400 ml-1 animate-pulse align-middle" />
+                            <span className="inline-block w-1.5 h-3.5 bg-cyan-500 ml-1 animate-pulse align-middle" />
                           )}
                         </div>
                       )}
 
                       {/* Footer: timestamps & badges */}
-                      <div className="flex items-center justify-between pt-0.5 text-[9px] font-mono text-zinc-500">
+                      <div className="flex items-center justify-between pt-0.5 text-[9px] font-mono text-zinc-400 dark:text-zinc-500">
                         {msg.interrupted ? (
-                          <span className="text-amber-400/80 font-medium">Stopped by user</span>
+                          <span className="text-amber-500 dark:text-amber-400/80 font-medium">Stopped by user</span>
                         ) : (
                           <span />
                         )}
@@ -805,9 +808,9 @@ function ChatContent() {
         </div>
 
         {/* BOTTOM INPUT DOCK (FIXED AT BOTTOM) */}
-        <div className="p-3 md:p-4 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800/80 shrink-0">
+        <div className="p-3 md:p-4 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 shrink-0">
           <div className="max-w-3xl w-full mx-auto space-y-2">
-            <div className="relative rounded-2xl bg-zinc-900/90 border border-zinc-800 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all p-3 shadow-xl">
+            <div className="relative rounded-2xl bg-white dark:bg-zinc-900/90 border border-zinc-300 dark:border-zinc-800 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all p-3 shadow-xl">
               <textarea
                 ref={textareaRef}
                 value={inputMessage}
@@ -820,10 +823,10 @@ function ChatContent() {
                 }
                 disabled={models.length === 0 || isSending}
                 rows={2}
-                className="w-full bg-transparent text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none resize-none disabled:opacity-50 font-sans leading-relaxed"
+                className="w-full bg-transparent text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none resize-none disabled:opacity-50 font-sans leading-relaxed"
               />
 
-              <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800/50">
                 <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500">
                   <span>Shift + Enter for new line</span>
                   {inputMessage.length > 0 && <span>• {inputMessage.length} chars</span>}
@@ -834,10 +837,10 @@ function ChatContent() {
                     <button
                       type="button"
                       onClick={handleStopGenerating}
-                      className="px-4 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/40 text-xs font-semibold shadow-md shadow-red-500/10 flex items-center gap-1.5 cursor-pointer transition-all animate-pulse"
+                      className="px-4 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-600 dark:text-red-300 border border-red-400/40 text-xs font-semibold shadow-md shadow-red-500/10 flex items-center gap-1.5 cursor-pointer transition-all animate-pulse"
                       title="Stop generating tokens"
                     >
-                      <Square className="w-3 h-3 fill-red-400" />
+                      <Square className="w-3 h-3 fill-red-500 dark:fill-red-400 text-red-500 dark:text-red-400" />
                       <span>Stop</span>
                     </button>
                   ) : (
@@ -865,7 +868,7 @@ export default function ChatPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 h-full bg-zinc-950 flex items-center justify-center text-zinc-500 text-xs font-mono">
+        <div className="flex-1 h-full bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center text-zinc-500 text-xs font-mono">
           Initializing Chat Workspace...
         </div>
       }

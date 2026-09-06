@@ -100,17 +100,17 @@ export function Header() {
   }
 
   return (
-    <header className="h-16 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-20">
+    <header className="h-16 min-h-[64px] max-h-16 shrink-0 w-full border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-20 select-none transition-colors duration-150">
       {/* Left: Breadcrumbs & Titles */}
-      <div className="flex flex-col justify-center min-w-0">
-        <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 mb-0.5">
-          <span>Workbench</span>
-          <ChevronRight className="w-3 h-3 text-zinc-600" />
-          <span className="text-zinc-400">{current.section}</span>
-          <ChevronRight className="w-3 h-3 text-zinc-600" />
-          <span className="text-cyan-400 font-semibold">{current.title}</span>
+      <div className="flex flex-col justify-center min-w-0 pr-4 overflow-hidden">
+        <div className="flex items-center gap-1.5 text-[11px] font-mono text-zinc-500 dark:text-zinc-400 mb-0.5 whitespace-nowrap overflow-hidden">
+          <span className="shrink-0">Workbench</span>
+          <ChevronRight className="w-3 h-3 text-zinc-400 dark:text-zinc-600 shrink-0" />
+          <span className="text-zinc-700 dark:text-zinc-300 shrink-0">{current.section}</span>
+          <ChevronRight className="w-3 h-3 text-zinc-400 dark:text-zinc-600 shrink-0" />
+          <span className="text-cyan-600 dark:text-cyan-400 font-semibold truncate">{current.title}</span>
         </div>
-        <p className="text-xs text-zinc-400 hidden sm:block truncate">
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:block truncate max-w-xl">
           {current.subtitle}
         </p>
       </div>
@@ -121,20 +121,20 @@ export function Header() {
         {runningCount > 0 ? (
           <Link href="/runtime" title="View Active Worker Threads">
             <Badge variant="active" pulse size="md" className="cursor-pointer font-mono">
-              <Zap className="w-3 h-3 text-emerald-400" />
+              <Zap className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />
               <span>{runningCount} Active {runningCount === 1 ? "Worker" : "Workers"}</span>
             </Badge>
           </Link>
         ) : (
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/60 border border-zinc-800 text-zinc-500 text-xs font-mono">
-            <Activity className="w-3 h-3 text-zinc-600" />
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs font-mono">
+            <Activity className="w-3 h-3 text-zinc-400 dark:text-zinc-600" />
             <span>Workers Idle</span>
           </div>
         )}
 
         {/* Air-gapped health beacon */}
-        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-mono">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           <span>Loopback: 8000</span>
         </div>
 

@@ -3,7 +3,7 @@ import { AIModelResponse, LlamaServerStatusResponse, ModelRuntimeStatus } from '
 
 export interface ModelDownloadPayload {
   repo_id: string;
-  filename: string;
+  filename?: string;
   name?: string;
   quantization?: string;
 }
@@ -38,6 +38,23 @@ export const modelsApi = {
     return response.data;
   },
 
+  getDownloadProgress: async (id: string): Promise<{
+    model_id: string;
+    repo_id?: string;
+    filename?: string;
+    name?: string;
+    quantization?: string;
+    status: string;
+    downloaded_bytes: number;
+    total_bytes: number;
+    percent: number;
+    speed?: string | null;
+    error?: string | null;
+  }> => {
+    const response = await apiClient.get(`/models/${id}/progress`);
+    return response.data;
+  },
+
   uploadModel: async (
     file: File,
     nameOrProgress?: string | ((progressEvent: { loaded: number; total?: number }) => void),
@@ -59,9 +76,6 @@ export const modelsApi = {
     if (quantization) formData.append('quantization', quantization);
 
     const response = await apiClient.post<AIModelResponse>('/models/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
       onUploadProgress: progressCallback,
       timeout: 0,
     });
@@ -78,6 +92,9 @@ export const modelsApi = {
     host?: string;
     ctx_size?: number;
     n_gpu_layers?: number;
+    threads?: number;
+    wait_ready?: boolean;
+    timeout?: number;
   }): Promise<ModelRuntimeStatus> => {
     const response = await apiClient.post<ModelRuntimeStatus>('/models/runtime/start', payload);
     return response.data;

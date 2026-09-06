@@ -12,11 +12,7 @@ export const documentsApi = {
   uploadDocument: async (file: File): Promise<DocumentResponse> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await apiClient.post<DocumentResponse>('/documents/', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post<DocumentResponse>('/documents/', formData);
     return response.data;
   },
 

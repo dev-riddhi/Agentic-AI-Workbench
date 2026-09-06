@@ -38,27 +38,48 @@ html {
 
 /* Cyber-Industrial Glassmorphism Utilities */
 .glass-card {
-  background: rgba(24, 24, 27, 0.65);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(63, 63, 70, 0.45);
-  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(228, 228, 231, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 8px 30px -2px rgba(6, 182, 212, 0.15);
+}
+
+.dark .glass-card {
+  background: rgba(24, 24, 27, 0.65);
+  border: 1px solid rgba(63, 63, 70, 0.45);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.5);
+}
+
+.dark .glass-card:hover {
   border-color: rgba(6, 182, 212, 0.45);
   box-shadow: 0 8px 32px -2px rgba(6, 182, 212, 0.12);
 }
 
 .glass-panel {
-  background: rgba(18, 18, 21, 0.75);
+  background: rgba(248, 250, 252, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(228, 228, 231, 0.8);
+}
+
+.dark .glass-panel {
+  background: rgba(18, 18, 21, 0.75);
   border: 1px solid rgba(63, 63, 70, 0.4);
 }
 
 .glass-well {
+  background: rgba(244, 244, 245, 0.85);
+  border: 1px solid rgba(228, 228, 231, 0.9);
+}
+
+.dark .glass-well {
   background: rgba(9, 9, 11, 0.6);
   border: 1px solid rgba(39, 39, 42, 0.8);
 }
@@ -89,13 +110,21 @@ html {
 }
 
 ::-webkit-scrollbar-track {
+  background: rgba(244, 244, 245, 0.6);
+}
+
+.dark ::-webkit-scrollbar-track {
   background: rgba(18, 18, 21, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(63, 63, 70, 0.65);
+  background: rgba(212, 212, 216, 0.8);
   border-radius: 9999px;
   transition: background 0.15s ease;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(63, 63, 70, 0.65);
 }
 
 ::-webkit-scrollbar-thumb:hover {
