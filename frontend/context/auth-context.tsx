@@ -126,10 +126,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const demoLogin = async () => {
     // Perform real authentication against the backend using seeded administrator credentials
     try {
-      await login('admin@example.com', 'admin');
+      await login('admin@example.com', 'Password123!');
     } catch {
-      // If backend network error, still try to proceed
-      router.push('/agents');
+      // If Password123! fails, fallback to admin or redirect
+      try {
+        await login('admin@example.com', 'admin');
+      } catch {
+        router.push('/agents');
+      }
     }
   };
 
