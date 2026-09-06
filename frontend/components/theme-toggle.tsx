@@ -21,7 +21,7 @@ export function ThemeToggle() {
 
   if (!isClient) {
     return (
-      <div className="flex items-center gap-1 p-1 bg-slate-200/50 dark:bg-zinc-800/60 rounded-full border border-slate-300/40 dark:border-zinc-700/50 h-9 w-[112px]">
+      <div className="flex items-center gap-1 p-1 bg-slate-200/50 dark:bg-zinc-800/60 rounded-full border border-slate-300/40 dark:border-zinc-700/50 h-9 w-28">
         <div className="w-8 h-7 rounded-full bg-slate-300/40 dark:bg-zinc-700/40 animate-pulse" />
       </div>
     );

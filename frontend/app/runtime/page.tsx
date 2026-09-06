@@ -10,16 +10,12 @@ import {
   Square,
   Terminal,
   Zap,
-  CheckCircle2,
-  AlertCircle,
   Copy,
   Check,
   Power,
   Send,
-  Radio,
   Shield,
   Bot,
-  Clock,
 } from 'lucide-react';
 import {
   ActiveAgentRuntimeItem,
@@ -60,6 +56,18 @@ export default function RuntimePage() {
   const [testLatency, setTestLatency] = useState<number | null>(null);
   const [isTestingModel, setIsTestingModel] = useState(false);
 
+  const fetchLogs = async (showLoading = true) => {
+    if (showLoading) setIsFetchingLogs(true);
+    try {
+      const res = await runtimeApi.getModelLogs(150);
+      setRuntimeLogs(res.logs || []);
+    } catch {
+      // Handled
+    } finally {
+      if (showLoading) setIsFetchingLogs(false);
+    }
+  };
+
   // Initial load
   useEffect(() => {
     let active = true;
@@ -75,16 +83,23 @@ export default function RuntimePage() {
           setOverview(ov.value);
           setModelRuntime(ov.value.model_runtime);
           setActiveAgents(ov.value.active_agents || []);
-          if (ov.value.model_runtime.model_name && !selectedRuntimeModel) {
-            setSelectedRuntimeModel(ov.value.model_runtime.model_name);
+          if (ov.value.model_runtime.model_name) {
+            const runningName = ov.value.model_runtime.model_name;
+            setSelectedRuntimeModel((prev) => prev || runningName);
           }
         }
 
         if (active && models.status === 'fulfilled' && models.value) {
           setAvailableModels(models.value);
-          if (models.value.length > 0 && !selectedRuntimeModel) {
-            setSelectedRuntimeModel(models.value[0].name);
+          if (models.value.length > 0) {
+            setSelectedRuntimeModel((prev) => prev || (models.value[0]?.name ?? ''));
           }
+        }
+
+        // Initial logs
+        const logsRes = await runtimeApi.getModelLogs(150).catch(() => null);
+        if (active && logsRes?.logs) {
+          setRuntimeLogs(logsRes.logs);
         }
       } finally {
         if (active) setIsLoadingAgents(false);
@@ -92,7 +107,6 @@ export default function RuntimePage() {
     };
 
     loadAll();
-    fetchLogs();
 
     // Regular polling ticker for active workers
     const interval = setInterval(() => {
@@ -124,18 +138,6 @@ export default function RuntimePage() {
       toast.success('Runtime status synchronized.', 'Status Refreshed');
     } catch {
       toast.error('Failed to sync runtime status with backend.', 'Sync Failed');
-    }
-  };
-
-  const fetchLogs = async () => {
-    setIsFetchingLogs(true);
-    try {
-      const res = await runtimeApi.getModelLogs(150);
-      setRuntimeLogs(res.logs || []);
-    } catch {
-      // Handled
-    } finally {
-      setIsFetchingLogs(false);
     }
   };
 
@@ -765,7 +767,7 @@ export default function RuntimePage() {
                 </span>
                 <button
                   type="button"
-                  onClick={fetchLogs}
+                  onClick={() => { void fetchLogs(); }}
                   disabled={isFetchingLogs}
                   className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800 cursor-pointer"
                   title="Refresh console logs"

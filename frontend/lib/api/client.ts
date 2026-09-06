@@ -85,6 +85,9 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:token-refreshing', { detail: true }));
+      }
 
       try {
         const response = await axios.post(`${API_BASE_URL}/users/refresh`, {
@@ -114,6 +117,9 @@ apiClient.interceptors.response.use(
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:token-refreshing', { detail: false }));
+        }
       }
     }
 

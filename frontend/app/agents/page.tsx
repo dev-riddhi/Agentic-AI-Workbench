@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   Bot,
   Plus,
@@ -12,218 +12,446 @@ import {
   Wrench,
   FileText,
   Search,
-} from 'lucide-react';
-import { Agent } from '@/lib/api/types';
-import { agentsApi } from '@/lib/api/agents';
-import { useToast } from '@/context/toast-context';
+  Zap,
+  Clock,
+  Calendar,
+  RefreshCw,
+} from "lucide-react";
+import { Agent } from "@/lib/api/types";
+import { agentsApi } from "@/lib/api/agents";
+import { useToast } from "@/context/toast-context";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { SkeletonCard } from "@/components/ui/skeleton";
+import { ConfirmModal } from "@/components/ui/modal";
+
+type FilterTab = "all" | "running" | "scheduled" | "manual";
 
 export default function AgentListPage() {
-  const { toast, confirm } = useToast();
+  const { toast } = useToast();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [search, setSearch] = useState('');
+  const [runningAgentIds, setRunningAgentIds] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<FilterTab>("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Decommission confirmation state
+  const [decommissionTarget, setDecommissionTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const loadAgents = async () => {
+    setIsRefreshing(true);
+    try {
+      const [agentList, runningList] = await Promise.all([
+        agentsApi.getAgents(),
+        agentsApi.getRunningAgents().catch(() => []),
+      ]);
+
+      const runningIds = new Set((runningList || []).map((r) => r.id || (r as unknown as { agent_id?: string }).agent_id || ""));
+      setRunningAgentIds(runningIds);
+      setAgents(agentList || []);
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Failed to fetch agents from backend API.";
+      toast.error(detail, "API Error");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
-    agentsApi.getAgents()
-      .then((data) => {
-        if (active) {
-          setAgents(data || []);
-        }
-      })
-      .catch((err) => {
-        if (active) {
-          const detail = err?.response?.data?.detail || 'Failed to fetch agents from backend API.';
-          toast.error(detail, 'API Error');
-        }
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
+    Promise.all([
+      agentsApi.getAgents(),
+      agentsApi.getRunningAgents().catch(() => []),
+    ]).then(([agentList, runningList]) => {
+      if (!active) return;
+      const runningIds = new Set((runningList || []).map((r) => r.id || (r as unknown as { agent_id?: string }).agent_id || ""));
+      setRunningAgentIds(runningIds);
+      setAgents(agentList || []);
+      setIsLoading(false);
+    }).catch((err: unknown) => {
+      if (!active) return;
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        "Failed to fetch agents from backend API.";
+      toast.error(detail, "API Error");
+      setIsLoading(false);
+    });
+
+    const interval = setInterval(() => {
+      agentsApi
+        .getRunningAgents()
+        .then((runningList) => {
+          if (!active) return;
+          const runningIds = new Set((runningList || []).map((r) => r.id || (r as unknown as { agent_id?: string }).agent_id || ""));
+          setRunningAgentIds(runningIds);
+        })
+        .catch(() => {});
+    }, 6000);
 
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, [toast]);
 
-  const handleDelete = async (id: string, name: string) => {
-    const ok = await confirm({
-      title: 'Decommission Agent',
-      message: `Are you sure you want to decommission agent "${name}"? This permanently removes the agent from the database.`,
-      confirmText: 'Yes, Decommission',
-      cancelText: 'Cancel',
-      danger: true,
-    });
-    if (!ok) return;
+  const handleConfirmDelete = async () => {
+    if (!decommissionTarget) return;
+    setIsDeleting(true);
+    const { id, name } = decommissionTarget;
 
     try {
       await agentsApi.deleteAgent(id);
       setAgents((prev) => prev.filter((a) => a.id !== id));
-      toast.success(`Agent "${name}" decommissioned successfully.`, 'Agent Decommissioned');
+      toast.success(`Agent "${name}" decommissioned successfully.`, "Agent Removed");
+      setDecommissionTarget(null);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to delete agent on backend';
-      toast.error(msg, 'Delete Failed');
+        "Failed to decommission agent on backend.";
+      toast.error(msg, "Decommission Failed");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const filteredAgents = agents.filter(
-    (a) =>
-      a.name.toLowerCase().includes(search.toLowerCase()) ||
-      (a.description && a.description.toLowerCase().includes(search.toLowerCase())) ||
-      (a.model && a.model.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Filtered & Searched Agents
+  const filteredAgents = useMemo(() => {
+    return agents.filter((agent) => {
+      // Tab filter
+      const isRunning = agent.is_running || runningAgentIds.has(agent.id);
+      if (activeTab === "running" && !isRunning) return false;
+      if (activeTab === "scheduled" && agent.trigger !== "schedule") return false;
+      if (activeTab === "manual" && agent.trigger === "schedule") return false;
+
+      // Search query
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        agent.name.toLowerCase().includes(q) ||
+        (agent.description && agent.description.toLowerCase().includes(q)) ||
+        (agent.model && agent.model.toLowerCase().includes(q)) ||
+        (agent.tools && agent.tools.some((t) => t.name.toLowerCase().includes(q)))
+      );
+    });
+  }, [agents, runningAgentIds, activeTab, search]);
+
+  const runningCount = agents.filter((a) => a.is_running || runningAgentIds.has(a.id)).length;
+  const scheduledCount = agents.filter((a) => a.trigger === "schedule").length;
 
   return (
     <div className="space-y-6">
-      {/* Search & Actions Bar */}
+      {/* Top Banner & Stats Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2.5">
+            <span>Configured Fleet</span>
+            <Badge variant="cyan" size="sm" className="font-mono">
+              {agents.length} Total
+            </Badge>
+            {runningCount > 0 && (
+              <Badge variant="active" pulse size="sm" className="font-mono">
+                {runningCount} Active
+              </Badge>
+            )}
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1">
+            Supervise on-premise autonomous agents and scheduled operational tasks
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => { void loadAgents(); }}
+            isLoading={isRefreshing}
+            leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />}
+          >
+            Refresh
+          </Button>
+
+          <Link href="/agents/new">
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              Provision Agent
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-2 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 backdrop-blur-md">
+        {/* Category Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "all"
+                ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/30"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+            }`}
+          >
+            <span>All Fleet</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+              {agents.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("running")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "running"
+                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+            }`}
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            <span>Running</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+              {runningCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("scheduled")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "scheduled"
+                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+            }`}
+          >
+            <Clock className="w-3 h-3 text-amber-400" />
+            <span>Scheduled</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-zinc-800 text-zinc-400 font-mono">
+              {scheduledCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("manual")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "manual"
+                ? "bg-zinc-800 text-zinc-200 border border-zinc-700"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+            }`}
+          >
+            <Zap className="w-3 h-3 text-cyan-400" />
+            <span>On-Demand</span>
+          </button>
+        </div>
+
+        {/* Live Search Input */}
+        <div className="relative w-full md:w-72">
           <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search agents by name, model, or instructions..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-zinc-900/90 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
+            placeholder="Filter agents, models, tools..."
+            className="w-full pl-10 pr-4 py-1.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-xs text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors font-mono"
           />
         </div>
-
-        <Link
-          href="/agents/new"
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Provision New Agent</span>
-        </Link>
       </div>
 
+      {/* Main Grid Content */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-64 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 animate-pulse p-6"
-            />
-          ))}
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       ) : filteredAgents.length === 0 ? (
-        <div className="p-12 text-center rounded-2xl bg-zinc-900/40 border border-zinc-800">
-          <Bot className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-          <h3 className="text-sm font-semibold text-zinc-200">No matching agents in backend</h3>
-          <p className="text-xs text-zinc-500 mt-1 mb-4">
-            Create an agent to assign tools and start executing diagnostic tasks.
+        <div className="p-12 text-center rounded-2xl glass-card border border-dashed border-zinc-800 flex flex-col items-center">
+          <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 mb-4 shadow-inner">
+            <Bot className="w-7 h-7" />
+          </div>
+          <h3 className="text-base font-semibold text-zinc-200">
+            {search ? "No matching agents found" : "No autonomous agents in fleet"}
+          </h3>
+          <p className="text-xs text-zinc-500 mt-1.5 mb-6 max-w-sm leading-relaxed">
+            {search
+              ? "Try adjusting your search query or reset the filter tabs above."
+              : "Provision your first autonomous AI agent powered by local GGUF models and enterprise tools."}
           </p>
-          <Link
-            href="/agents/new"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Provision Agent via Backend API
+          <Link href="/agents/new">
+            <Button variant="primary" size="md" leftIcon={<Plus className="w-4 h-4" />}>
+              Deploy First Agent
+            </Button>
           </Link>
         </div>
       ) : (
-        /* Agent Cards Grid */
+        /* Agent Fleet Cards Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredAgents.map((agent) => (
-            <div
-              key={agent.id}
-              className="group relative flex flex-col justify-between p-6 rounded-2xl bg-zinc-900/70 border border-zinc-800/90 hover:border-zinc-700 hover:bg-zinc-900 transition-all duration-200 shadow-sm"
-            >
-              <div>
-                {/* Card Header: Icon & Model Chip */}
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                    <Bot className="w-5 h-5" />
-                  </div>
+          {filteredAgents.map((agent) => {
+            const isRunning = agent.is_running || runningAgentIds.has(agent.id);
 
-                  <div className="flex items-center gap-1.5">
-                    {agent.is_running && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Running
-                      </span>
-                    )}
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80">
-                      <Cpu className="w-3 h-3 text-cyan-400" />
-                      <span className="truncate max-w-[130px]">{agent.model || agent.ai_model?.name || 'Local GGUF'}</span>
-                    </span>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono capitalize bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
-                      {agent.trigger === 'onetime' ? 'one-time' : (agent.trigger || 'manual')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Agent Title & Description */}
-                <h3 className="text-base font-bold text-zinc-100 group-hover:text-white transition-colors mb-1.5">
-                  {agent.name}
-                </h3>
-                <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-4">
-                  {agent.description || 'No description provided.'}
-                </p>
-
-                {/* Tools & Knowledge Badges */}
-                <div className="space-y-2 mb-6">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {agent.tools && agent.tools.length > 0 ? (
-                      agent.tools.map((tool) => (
-                        <span
-                          key={tool.id || tool.name}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
-                        >
-                          <Wrench className="w-2.5 h-2.5" />
-                          {tool.name}
+            return (
+              <div
+                key={agent.id}
+                className="group relative flex flex-col justify-between p-6 rounded-2xl glass-card hover:border-zinc-700/80 transition-all duration-200"
+              >
+                <div>
+                  {/* Card Header: Avatar, Status & Model Chip */}
+                  <div className="flex items-start justify-between gap-3 mb-3.5">
+                    <div className="relative">
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-cyan-500/15 via-blue-500/15 to-indigo-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-transform shadow-[0_0_16px_rgba(6,182,212,0.15)]">
+                        <Bot className="w-5 h-5" />
+                      </div>
+                      {isRunning && (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-zinc-950" />
                         </span>
-                      ))
-                    ) : (
-                      <span className="text-[10px] text-zinc-600 font-mono">No active tools</span>
-                    )}
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-[65%]">
+                      {isRunning ? (
+                        <Badge variant="active" pulse size="sm">
+                          Executing
+                        </Badge>
+                      ) : (
+                        <Badge variant="offline" size="sm">
+                          Idle
+                        </Badge>
+                      )}
+
+                      <Badge variant="model" size="sm" title={agent.model || "GGUF Model"}>
+                        <Cpu className="w-3 h-3 text-cyan-400 shrink-0" />
+                        <span className="truncate max-w-[120px]">
+                          {agent.model || agent.ai_model?.name || "Local GGUF"}
+                        </span>
+                      </Badge>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[11px] text-zinc-500 font-mono">
-                    <FileText className="w-3 h-3 text-zinc-400" />
-                    <span>
-                      {agent.documents?.length || 0} Knowledge Document
-                      {agent.documents?.length === 1 ? '' : 's'}
-                    </span>
+                  {/* Agent Identity */}
+                  <h3 className="text-base font-bold text-zinc-100 group-hover:text-cyan-300 transition-colors mb-1.5 flex items-center gap-2">
+                    <span className="truncate">{agent.name}</span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-4">
+                    {agent.description || "No description provided."}
+                  </p>
+
+                  {/* Trigger Chip & Capabilities */}
+                  <div className="space-y-2.5 mb-6">
+                    {/* Trigger Schedule Indicator */}
+                    <div className="flex items-center gap-1.5 text-xs">
+                      {agent.trigger === "schedule" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono bg-amber-950/40 text-amber-300 border border-amber-500/30">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>{agent.schedule || "Scheduled cron"}</span>
+                        </span>
+                      ) : agent.trigger === "onetime" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono bg-violet-950/40 text-violet-300 border border-violet-500/30">
+                          <Calendar className="w-3 h-3 text-violet-400" />
+                          <span>One-Time Run</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[11px] font-mono bg-zinc-900 text-zinc-400 border border-zinc-800">
+                          <Zap className="w-3 h-3 text-cyan-400" />
+                          <span>On-Demand Manual</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Assigned Tools Badges */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {agent.tools && agent.tools.length > 0 ? (
+                        agent.tools.slice(0, 3).map((tool) => (
+                          <span
+                            key={tool.id || tool.name}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono bg-cyan-950/40 text-cyan-300 border border-cyan-500/25"
+                          >
+                            <Wrench className="w-2.5 h-2.5" />
+                            {tool.name}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[10px] text-zinc-600 font-mono">No active tools</span>
+                      )}
+                      {agent.tools && agent.tools.length > 3 && (
+                        <span className="text-[10px] text-zinc-500 font-mono px-1">
+                          +{agent.tools.length - 3} more
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Knowledge Documents Count */}
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-mono pt-1">
+                      <FileText className="w-3 h-3 text-zinc-400" />
+                      <span>
+                        {agent.documents?.length || 0} Knowledge Document
+                        {agent.documents?.length === 1 ? "" : "s"} attached
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Bottom Action Footer */}
-              <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <Link
-                    href={`/agents/${agent.id}?tab=config`}
-                    title="Configure Agent"
-                    className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
-                  >
-                    <Settings className="w-4 h-4" />
+                {/* Card Action Footer */}
+                <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <Link
+                      href={`/agents/${agent.id}?tab=config`}
+                      title="Edit Agent Configuration"
+                      className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/80 transition-colors"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </Link>
+
+                    <button
+                      type="button"
+                      title="Decommission Agent"
+                      onClick={() => setDecommissionTarget({ id: agent.id, name: agent.name })}
+                      className="p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <Link href={`/agents/${agent.id}`}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      rightIcon={<ArrowRight className="w-3.5 h-3.5" />}
+                    >
+                      Open Mission HQ
+                    </Button>
                   </Link>
-
-                  <button
-                    type="button"
-                    title="Delete Agent"
-                    onClick={() => handleDelete(agent.id, agent.name)}
-                    className="p-2 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
-
-                <Link
-                  href={`/agents/${agent.id}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-xs font-semibold border border-cyan-500/30 transition-colors"
-                >
-                  <span>Open Workspace</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
+
+      {/* Decommission Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!decommissionTarget}
+        onClose={() => setDecommissionTarget(null)}
+        onConfirm={handleConfirmDelete}
+        title="Decommission Autonomous Agent"
+        message={`Are you sure you want to decommission agent "${decommissionTarget?.name}"? This action will cancel any active executions and permanently purge the agent configuration from the database.`}
+        confirmText="Yes, Decommission"
+        cancelText="Cancel"
+        danger
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -4,7 +4,6 @@ import {
   AgentCreatePayload,
   AgentUpdatePayload,
   AgentRunResponse,
-  AvailableTool,
   DocumentResponse,
 } from './types';
 
@@ -60,11 +59,6 @@ export const agentsApi = {
 
   getAgentDocuments: async (id: string): Promise<DocumentResponse[]> => {
     const response = await apiClient.get<DocumentResponse[]>(`/agents/${id}/documents`);
-    return response.data;
-  },
-
-  getAvailableTools: async (): Promise<AvailableTool[]> => {
-    const response = await apiClient.get<AvailableTool[]>('/agents/tools');
     return response.data;
   },
 };
