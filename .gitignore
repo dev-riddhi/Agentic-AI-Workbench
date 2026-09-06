@@ -1,0 +1,74 @@
+# ==========================================
+# Sovereign On-Premise Agentic AI Workbench
+# Git Ignore Configuration
+# ==========================================
+
+# --- Python & Virtual Environments ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# --- IDE & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Environment Files & Secrets ---
+.env
+.env.local
+.env.*.local
+*.env
+*.pem
+*.key
+
+# --- Local Databases & Data Stores ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+backend/database/*.db
+backend/database/*.sqlite
+
+# --- Uploads & AI Model Binaries ---
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/models/*
+!backend/models/.gitkeep
+backend/llama.cpp/
+
+# --- Node.js & Frontend ---
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+*.tsbuildinfo
+next-env.d.ts
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Testing & Coverage ---
+coverage/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Alembic Migration Directory Keep ---
+!backend/alembic/versions/.gitkeep
