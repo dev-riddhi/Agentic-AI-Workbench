@@ -1,3 +1,4 @@
+from typing import Any
 from datetime import datetime
 from uuid import UUID
 
@@ -6,11 +7,21 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from app.features.ai_model.schemas import AIModelResponse
 
 
+class AvailableToolResponse(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ToolResponse(BaseModel):
     id: str | UUID | None = None
     name: str
     description: str | None = None
     handler: str | None = None
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -108,9 +119,11 @@ class AgentResponse(BaseModel):
         if not v:
             return []
         try:
-            from app.tools import TOOL_DESCRIPTIONS
+            from app.tools import TOOL_DESCRIPTIONS, TOOLS
+            tool_params = {t["name"]: t.get("parameters", {}) for t in TOOLS}
         except ImportError:
             TOOL_DESCRIPTIONS = {}
+            tool_params = {}
 
         res = []
         for item in v:
@@ -120,6 +133,7 @@ class AgentResponse(BaseModel):
                     "name": item,
                     "description": TOOL_DESCRIPTIONS.get(item),
                     "handler": item,
+                    "parameters": tool_params.get(item, {}),
                 })
             elif hasattr(item, "tool_name"):
                 name = item.tool_name
@@ -128,6 +142,7 @@ class AgentResponse(BaseModel):
                     "name": name,
                     "description": TOOL_DESCRIPTIONS.get(name),
                     "handler": name,
+                    "parameters": tool_params.get(name, {}),
                 })
             elif hasattr(item, "name"):
                 name = item.name
@@ -136,12 +151,15 @@ class AgentResponse(BaseModel):
                     "name": name,
                     "description": getattr(item, "description", None) or TOOL_DESCRIPTIONS.get(name),
                     "handler": getattr(item, "handler", name),
+                    "parameters": getattr(item, "parameters", None) or tool_params.get(name, {}),
                 })
             elif isinstance(item, dict):
                 d = dict(item)
                 name = d.get("name") or d.get("id")
                 if name and not d.get("description"):
                     d["description"] = TOOL_DESCRIPTIONS.get(name)
+                if name and not d.get("parameters"):
+                    d["parameters"] = tool_params.get(name, {})
                 res.append(d)
         return res
 
