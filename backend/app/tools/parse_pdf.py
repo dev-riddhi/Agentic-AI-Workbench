@@ -6,16 +6,19 @@ from pathlib import Path
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def parse_pdf(
     file_path: str,
     pages: list[int] | None = None,
     max_pages: int | None = None,
     extract_metadata: bool = True,
 ) -> dict[str, Any]:
-    """Extracts text content and metadata from a PDF file.
+    """Extracts text content and metadata from a PDF file inside uploads.
 
     Args:
-        file_path: Absolute or relative path to the PDF file.
+        file_path: Path to the PDF file inside the uploads directory.
         pages: Optional list of specific 1-based page numbers to extract (e.g. [1, 2, 5]).
         max_pages: Optional maximum number of pages to parse.
         extract_metadata: Whether to extract document title, author, and creation metadata.
@@ -23,7 +26,15 @@ def parse_pdf(
     Returns:
         dict: Result containing extracted text, page count, and metadata.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
+
     if not path.exists():
         return {
             "success": False,

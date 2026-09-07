@@ -7,6 +7,9 @@ import re
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def search_files(
     directory_path: str = ".",
     query: str | None = None,
@@ -15,10 +18,10 @@ def search_files(
     case_sensitive: bool = False,
     max_results: int = 50,
 ) -> dict[str, Any]:
-    """Searches for files matching a pattern and/or containing specific content.
+    """Searches for files matching a pattern and/or containing specific content inside uploads.
 
     Args:
-        directory_path: Base directory to search from.
+        directory_path: Base directory inside uploads to search from (default: '.' for uploads root).
         query: Optional string/regex to search for inside file contents.
         file_pattern: Filename glob pattern (e.g. '*.py', '*config*').
         is_regex: If True, treat query as a regular expression.
@@ -28,7 +31,15 @@ def search_files(
     Returns:
         dict: Result containing matching files or line matches.
     """
-    root = Path(directory_path).resolve()
+    try:
+        root = resolve_safe_path(directory_path, default_to_root=True)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "directory": str(directory_path),
+        }
+
     if not root.exists() or not root.is_dir():
         return {
             "success": False,

@@ -22,6 +22,7 @@ from app.tools.browse_links import browse_links
 from app.tools.search_news import search_news
 from app.tools.search_images import search_images
 from app.tools.download_files import download_files
+from app.tools.file_security import get_upload_dir, resolve_safe_path
 from app.tools.query_apis import query_apis
 from app.tools.python_execution import python_execution
 
@@ -864,4 +865,6 @@ __all__ = [
     "download_files",
     "query_apis",
     "python_execution",
+    "get_upload_dir",
+    "resolve_safe_path",
 ]

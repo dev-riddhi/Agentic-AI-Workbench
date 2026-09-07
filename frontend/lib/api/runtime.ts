@@ -1,9 +1,11 @@
 import { apiClient } from './client';
 import {
   ActiveAgentRuntimeItem,
+  AgentRuntimeStatus,
   ModelRuntimeStatus,
   ModelTestResponse,
   RuntimeOverviewResponse,
+  RuntimeStatusResponse,
 } from './types';
 
 export interface StartModelPayload {
@@ -56,6 +58,26 @@ export const runtimeApi = {
   },
 
   // Agent Runtime endpoints
+  getAgentRuntimeStatus: async (): Promise<AgentRuntimeStatus> => {
+    const response = await apiClient.get<AgentRuntimeStatus>('/runtime/agents/status');
+    return response.data;
+  },
+
+  startAgentScheduler: async (): Promise<AgentRuntimeStatus> => {
+    const response = await apiClient.post<AgentRuntimeStatus>('/runtime/agents/scheduler/start');
+    return response.data;
+  },
+
+  stopAgentScheduler: async (): Promise<AgentRuntimeStatus> => {
+    const response = await apiClient.post<AgentRuntimeStatus>('/runtime/agents/scheduler/stop');
+    return response.data;
+  },
+
+  getRuntimeStatus: async (): Promise<RuntimeStatusResponse> => {
+    const response = await apiClient.get<RuntimeStatusResponse>('/runtime/status');
+    return response.data;
+  },
+
   getActiveAgents: async (): Promise<ActiveAgentRuntimeItem[]> => {
     const response = await apiClient.get<ActiveAgentRuntimeItem[]>('/runtime/agents');
     return response.data;

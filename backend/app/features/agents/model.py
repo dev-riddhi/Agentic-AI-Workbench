@@ -19,7 +19,7 @@ def get_agents(
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .offset(skip)
         .limit(limit)
@@ -37,7 +37,7 @@ def get_agent(db: Session, agent_id: UUID) -> Agent | None:
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .where(Agent.id == agent_id)
     )
@@ -196,7 +196,7 @@ def get_running_agents(
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .distinct()
     )

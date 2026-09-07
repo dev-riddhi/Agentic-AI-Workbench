@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useId } from 'react';
+import React, { createContext, useContext, useState, useCallback, useId, useMemo } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -67,12 +67,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [baseId, removeToast]
   );
 
-  const toast = {
+  const toast = useMemo(() => ({
     success: (message: string, title?: string) => showToast(message, 'success', title),
     error: (message: string, title?: string) => showToast(message, 'error', title),
     warning: (message: string, title?: string) => showToast(message, 'warning', title),
     info: (message: string, title?: string) => showToast(message, 'info', title),
-  };
+  }), [showToast]);
 
   const confirm = useCallback((options: ConfirmOptions): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -87,8 +87,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ showToast, toast, confirm }),
+    [showToast, toast, confirm]
+  );
+
   return (
-    <ToastContext.Provider value={{ showToast, toast, confirm }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
 
       {/* TOAST CONTAINER (Top Right) */}

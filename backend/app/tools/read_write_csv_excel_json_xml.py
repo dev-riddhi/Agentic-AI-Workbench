@@ -10,6 +10,9 @@ from typing import Any
 import xml.etree.ElementTree as ET
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def read_write_csv_excel_json_xml(
     action: str,
     file_path: str,
@@ -19,11 +22,11 @@ def read_write_csv_excel_json_xml(
     root_tag: str = "root",
     encoding: str = "utf-8",
 ) -> dict[str, Any]:
-    """Reads or writes structured datasets across CSV, Excel, JSON, and XML.
+    """Reads or writes structured datasets across CSV, Excel, JSON, and XML inside uploads.
 
     Args:
         action: 'read' or 'write'.
-        file_path: Target file path.
+        file_path: Target file path inside the uploads directory.
         format: Format override ('csv', 'excel', 'json', 'xml'). If None, infers from extension.
         data: Data to write (list of dicts, dict, or nested structure).
         sheet_name: Specific sheet name for Excel operations.
@@ -33,7 +36,15 @@ def read_write_csv_excel_json_xml(
     Returns:
         dict: Result containing data or write status.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
+
     act = action.strip().lower()
 
     # Determine format

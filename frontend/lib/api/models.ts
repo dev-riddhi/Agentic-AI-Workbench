@@ -59,9 +59,6 @@ export const modelsApi = {
     if (quantization) formData.append('quantization', quantization);
 
     const response = await apiClient.post<AIModelResponse>('/models/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
       onUploadProgress: progressCallback,
       timeout: 0,
     });

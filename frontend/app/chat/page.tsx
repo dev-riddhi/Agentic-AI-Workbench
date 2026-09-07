@@ -61,7 +61,7 @@ function ChatContent() {
   const [runtimeStatus, setRuntimeStatus] = useState<ModelRuntimeStatus | null>(null);
 
   // Layout states
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Loading states
   const [isLoadingList, setIsLoadingList] = useState(true);
@@ -148,7 +148,7 @@ function ChatContent() {
       .then((st) => {
         if (active) setRuntimeStatus(st);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // Load conversations
     chatApi.listConversations()
@@ -178,6 +178,8 @@ function ChatContent() {
       return;
     }
 
+    if (isSending) return;
+
     const selectedModel = models.find((m) => m.id === selectedModelId);
     const modelName = selectedModel ? selectedModel.name : 'AI Model';
 
@@ -185,7 +187,6 @@ function ChatContent() {
       const newConv = await chatApi.createConversation({
         model_id: selectedModelId,
         title: `Chat with ${modelName}`,
-        initial_message: presetPrompt || undefined,
         system_prompt: systemPrompt,
       });
 
@@ -195,7 +196,7 @@ function ChatContent() {
           model_id: newConv.model_id,
           model_name: modelName,
           title: newConv.title,
-          message_count: newConv.messages.length,
+          message_count: 0,
           last_message: presetPrompt || null,
           created_at: newConv.created_at,
           updated_at: newConv.updated_at,
@@ -362,10 +363,13 @@ function ChatContent() {
   const handleSendMessage = () => {
     if (!inputMessage.trim() || isSending) return;
 
+    const messageText = inputMessage.trim();
+    setInputMessage('');
+
     if (!activeConvId) {
-      handleStartNewChat(inputMessage.trim());
+      handleStartNewChat(messageText);
     } else {
-      triggerSend(activeConvId, inputMessage.trim());
+      triggerSend(activeConvId, messageText);
     }
   };
 
@@ -387,9 +391,8 @@ function ChatContent() {
     <div className="flex-1 flex min-h-0 w-full h-full overflow-hidden bg-zinc-950 select-none">
       {/* LEFT SIDEBAR: THREAD HISTORY (COLLAPSIBLE) */}
       <aside
-        className={`h-full bg-zinc-950 flex flex-col shrink-0 min-h-0 transition-all duration-200 ease-in-out ${
-          isSidebarOpen ? 'w-80 border-r border-zinc-800/80' : 'w-0 border-r-0 overflow-hidden'
-        }`}
+        className={`h-full bg-zinc-950 flex flex-col shrink-0 min-h-0 transition-all duration-200 ease-in-out ${isSidebarOpen ? 'w-80 border-r border-zinc-800/80' : 'w-0 border-r-0 overflow-hidden'
+          }`}
       >
         {isSidebarOpen && (
           <div className="flex flex-col h-full min-h-0">
@@ -464,11 +467,10 @@ function ChatContent() {
                     <div
                       key={conv.id}
                       onClick={() => loadConversation(conv.id)}
-                      className={`group relative p-2.5 rounded-xl cursor-pointer transition-all text-left ${
-                        isActive
+                      className={`group relative p-2.5 rounded-xl cursor-pointer transition-all text-left ${isActive
                           ? 'bg-zinc-900 border border-cyan-500/30 text-zinc-100 shadow-sm shadow-cyan-500/5'
                           : 'hover:bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 border border-transparent'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-1.5">
                         <h3 className="text-xs font-semibold truncate leading-tight flex-1">
@@ -595,11 +597,10 @@ function ChatContent() {
             <button
               type="button"
               onClick={() => setShowConfig(!showConfig)}
-              className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
-                showConfig
+              className={`px-2.5 py-1.5 rounded-lg border text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${showConfig
                   ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30 font-medium'
                   : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:bg-zinc-800'
-              }`}
+                }`}
               title="Toggle inference parameters"
             >
               <Sliders className="w-3.5 h-3.5 text-cyan-400" />
@@ -699,6 +700,7 @@ function ChatContent() {
                     key={idx}
                     type="button"
                     onClick={() => {
+                      if (isSending) return;
                       if (activeConvId) {
                         triggerSend(activeConvId, item.prompt);
                       } else {
@@ -726,28 +728,25 @@ function ChatContent() {
                 return (
                   <div
                     key={idx}
-                    className={`flex items-start gap-3 ${
-                      isUser ? 'flex-row-reverse' : 'flex-row'
-                    }`}
+                    className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'
+                      }`}
                   >
                     {/* User / Bot Avatar */}
                     <div
-                      className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center border shadow-sm ${
-                        isUser
+                      className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center border shadow-sm ${isUser
                           ? 'bg-zinc-800 border-zinc-700 text-zinc-200'
                           : 'bg-gradient-to-tr from-cyan-600 to-blue-600 border-cyan-400/40 text-white'
-                      }`}
+                        }`}
                     >
                       {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                     </div>
 
                     {/* Bubble */}
                     <div
-                      className={`rounded-2xl px-4 py-3 max-w-[85%] text-xs leading-relaxed space-y-1.5 shadow-sm ${
-                        isUser
+                      className={`rounded-2xl px-4 py-3 max-w-[85%] text-xs leading-relaxed space-y-1.5 shadow-sm ${isUser
                           ? 'bg-cyan-600/10 border border-cyan-500/25 text-zinc-100 rounded-tr-xs'
                           : 'bg-zinc-900/90 border border-zinc-800 text-zinc-200 rounded-tl-xs'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-3 text-[10px] font-mono text-zinc-500 mb-0.5">
                         <span className="font-semibold text-zinc-400 uppercase tracking-wider">

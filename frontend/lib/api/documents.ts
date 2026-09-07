@@ -9,13 +9,14 @@ export const documentsApi = {
     return response.data;
   },
 
-  uploadDocument: async (file: File): Promise<DocumentResponse> => {
+  uploadDocument: async (
+    file: File,
+    onUploadProgress?: (progressEvent: { loaded: number; total?: number }) => void
+  ): Promise<DocumentResponse> => {
     const formData = new FormData();
     formData.append('file', file);
     const response = await apiClient.post<DocumentResponse>('/documents/', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      onUploadProgress,
     });
     return response.data;
   },

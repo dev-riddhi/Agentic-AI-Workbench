@@ -83,10 +83,11 @@ export default function DocumentsPage() {
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      const validExtensions = ['.pdf', '.docx', '.txt', '.csv', '.xlsx'];
-      const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      if (!validExtensions.includes(fileExt)) {
-        setUploadError(`Invalid file format: ${fileExt}. Supported: PDF, DOCX, TXT, CSV, XLSX.`);
+      const validExtensions = ['.pdf', '.docx', '.doc', '.txt', '.csv', '.xlsx', '.xls', '.md', '.json'];
+      const dotIdx = file.name.lastIndexOf('.');
+      const fileExt = dotIdx !== -1 ? file.name.substring(dotIdx).toLowerCase() : '';
+      if (dotIdx !== -1 && !validExtensions.includes(fileExt)) {
+        setUploadError(`Invalid file format: ${fileExt}. Supported: PDF, DOCX, TXT, CSV, XLSX, MD, JSON.`);
         return;
       }
       setSelectedFile(file);
@@ -94,22 +95,26 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedFile) return;
+  const handleUpload = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    if (!selectedFile || isUploading) return;
 
     setIsUploading(true);
-    setUploadProgress(10);
+    setUploadProgress(5);
     setUploadSuccess(false);
     setUploadError(null);
 
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => (prev < 90 ? prev + 15 : prev));
-    }, 150);
-
     try {
-      const newDoc = await documentsApi.uploadDocument(selectedFile);
-      clearInterval(progressInterval);
+      const newDoc = await documentsApi.uploadDocument(selectedFile, (progressEvent) => {
+        if (progressEvent.total) {
+          const pct = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(Math.min(pct, 95));
+        } else {
+          setUploadProgress(50);
+        }
+      });
       setUploadProgress(100);
       setDocuments((prev) => [newDoc, ...prev]);
       setSelectedFile(null);
@@ -120,7 +125,6 @@ export default function DocumentsPage() {
         setActiveTab('index');
       }, 1500);
     } catch (err: unknown) {
-      clearInterval(progressInterval);
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
         'Failed to upload document to backend API.';
@@ -439,8 +443,12 @@ export default function DocumentsPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,.docx,.txt,.csv,.xlsx"
+                accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls,.md,.json"
                 onChange={handleFileChange}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  (e.currentTarget as HTMLInputElement).value = '';
+                }}
                 className="hidden"
               />
 
@@ -455,7 +463,7 @@ export default function DocumentsPage() {
               <p className="text-xs text-zinc-500 mt-1 font-mono">
                 {selectedFile
                   ? `${formatFileSize(selectedFile.size)} · Ready to ingest`
-                  : 'PDF, DOCX, TXT, CSV, XLSX (Up to 100MB)'}
+                  : 'PDF, DOCX, TXT, CSV, XLSX, MD, JSON (Up to 100MB)'}
               </p>
             </div>
 
@@ -476,10 +484,12 @@ export default function DocumentsPage() {
             )}
 
             <Button
+              type="submit"
+              onClick={handleUpload}
               variant="primary"
               size="lg"
               disabled={!selectedFile || isUploading}
-              className="w-full justify-center gap-2 shadow-lg shadow-cyan-500/20"
+              className="w-full justify-center gap-2 shadow-lg shadow-cyan-500/20 cursor-pointer"
             >
               {isUploading ? (
                 <>

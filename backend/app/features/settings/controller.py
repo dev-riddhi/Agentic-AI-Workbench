@@ -10,5 +10,7 @@ def get_settings_controller(db: Session, key: str = "general") -> SettingsRespon
 
 def update_settings_controller(db: Session, payload: SettingsUpdate, key: str = "general") -> SettingsResponse:
     update_dict = payload.model_dump(exclude_unset=True)
+    if payload.is_testing is not None:
+        update_dict["is_testing"] = bool(payload.is_testing)
     setting = model.update_settings(db, update_data=update_dict, key=key)
     return SettingsResponse.model_validate(setting)

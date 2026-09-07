@@ -1,4 +1,10 @@
+from collections.abc import Generator
 from datetime import datetime, timezone
+import json
+import logging
+import queue
+import threading
+import time
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,9 +21,11 @@ from app.features.agents.schemas import (
     AgentStopResponse,
     AgentUpdate,
 )
-from database.models import Agent, Document
+from app.runtime.agent_runtime import agent_runtime
+from database.database import SessionLocal
+from database.models import AgentTrigger, Agent, Document
 
-
+logger = logging.getLogger(__name__)
 
 def get_agents_controller(
     db: Session,
@@ -25,7 +33,10 @@ def get_agents_controller(
     skip: int = 0,
     limit: int = 100,
 ) -> list[Agent]:
-    return model.get_agents(db=db, owner_id=owner_id, skip=skip, limit=limit)
+    agents = model.get_agents(db=db, owner_id=owner_id, skip=skip, limit=limit)
+    if not agents and owner_id is not None:
+        return model.get_agents(db=db, owner_id=None, skip=skip, limit=limit)
+    return agents
 
 
 def get_agent_controller(db: Session, agent_id: UUID) -> Agent:
@@ -35,7 +46,17 @@ def get_agent_controller(db: Session, agent_id: UUID) -> Agent:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent not found",
         )
+    # When visiting the specific agent, use its RuntimeThread to get accurate live status
+    is_alive = agent_runtime.is_agent_executing(agent.id)
+    if agent.is_running != is_alive:
+        # agent.is_running = is_alive
+        model.set_agent_running(db=db, agent_id=agent.id, is_running=is_alive)
     return agent
+
+
+def get_agent_thread_status_controller(agent_id: UUID) -> dict[str, Any]:
+    """Inspects the active or latest RuntimeThread for an agent."""
+    return agent_runtime.get_agent_thread_status(agent_id)
 
 
 def create_agent_controller(
@@ -45,10 +66,14 @@ def create_agent_controller(
 ) -> Agent:
     ai_model = ai_model_model.get_ai_model_by_id(db=db, model_id=agent_in.model_id)
     if not ai_model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"AI Model with id '{agent_in.model_id}' not found",
-        )
+        first_model = db.query(ai_model_model.AIModel).first()
+        if first_model:
+            ai_model = first_model
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"AI Model with id '{agent_in.model_id}' not found",
+            )
 
     tools = model.resolve_tools(db=db, identifiers=agent_in.tools)
     documents = model.resolve_documents(db=db, doc_ids=agent_in.document_ids)
@@ -85,14 +110,18 @@ def update_agent_controller(
         )
 
     model_name = None
-    if agent_in.model_id is not None:
-        ai_model = ai_model_model.get_ai_model_by_id(db=db, model_id=agent_in.model_id)
-        if not ai_model:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"AI Model with id '{agent_in.model_id}' not found",
-            )
-        model_name = ai_model.name
+    target_model_id = agent_in.model_id
+    if target_model_id is not None:
+        ai_model = ai_model_model.get_ai_model_by_id(db=db, model_id=target_model_id)
+        if ai_model:
+            model_name = ai_model.name
+        else:
+            first_model = db.query(ai_model_model.AIModel).first()
+            if first_model:
+                target_model_id = first_model.id
+                model_name = first_model.name
+            else:
+                model_name = agent.model or "Local Model"
 
     tools = (
         model.resolve_tools(db=db, identifiers=agent_in.tools)
@@ -111,7 +140,7 @@ def update_agent_controller(
         name=agent_in.name,
         description=agent_in.description,
         instructions=agent_in.instructions,
-        model_id=agent_in.model_id,
+        model_id=target_model_id,
         model_name=model_name,
         trigger=agent_in.trigger,
         schedule=agent_in.schedule,
@@ -122,6 +151,7 @@ def update_agent_controller(
         tools=tools,
         documents=documents,
     )
+
 
 
 def delete_agent_controller(db: Session, agent_id: UUID) -> None:
@@ -154,15 +184,115 @@ def run_agent_controller(
         is_running=True,
     )
 
-    # Execution stub per instructions
+    
+    exec_result = agent_runtime.execute_agent(agent_id=agent.id, initial_prompt=run_in.prompt)
+    model.set_agent_running(db=db, agent_id=agent.id, is_running=False)
+
     return AgentRunResponse(
         execution_id=uuid4(),
         agent_id=agent.id,
-        status="completed",
-        response=f"Agent '{agent.name}' completed execution for prompt: {run_in.prompt}",
-        tool_calls=[],
+        status="completed" if exec_result.get("success", True) else "failed",
+        response=exec_result.get("response") or f"Agent '{agent.name}' completed execution.",
+        tool_calls=exec_result.get("tool_calls", []),
         completed_at=datetime.now(timezone.utc),
     )
+
+
+def run_agent_stream_controller(
+    db: Session,
+    agent_id: UUID,
+    run_in: AgentRunRequest,
+) -> Generator[str, None, None]:
+    agent = model.get_agent(db=db, agent_id=agent_id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+
+    # Check if a RuntimeThread is already alive for this agent
+    active_thread = agent_runtime.get_runtime_thread(agent.id)
+    if active_thread and active_thread.is_alive:
+        logger.warning(
+            "Agent %s already has active RuntimeThread '%s' (thread_id: %s)",
+            agent.id,
+            active_thread.thread.name,
+            active_thread.thread.ident,
+        )
+        yield f"data: {json.dumps({'type': 'error', 'error': f'Agent {agent.name} is already executing a task on worker thread {active_thread.thread.name}. Please wait or stop the active worker.'})}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
+
+    # Mark agent as running in DB
+    model.set_agent_running(db=db, agent_id=agent.id, is_running=True)
+
+    event_queue: queue.Queue = queue.Queue()
+    execution_done = threading.Event()
+    cancel_event = threading.Event()
+
+    def on_event(ev: dict[str, Any]):
+        event_queue.put(ev)
+
+    def worker():
+        try:
+            agent_runtime.execute_agent(
+                agent_id=agent.id,
+                initial_prompt=run_in.prompt,
+                print_to_terminal=True,
+                event_callback=on_event,
+            )
+        except Exception as exc:
+            logger.error("Error in streaming agent worker for %s: %s", agent.id, exc)
+            event_queue.put({"type": "error", "error": str(exc), "timestamp": datetime.now().isoformat()})
+        finally:
+            with SessionLocal() as worker_db:
+                try:
+                    model.set_agent_running(db=worker_db, agent_id=agent.id, is_running=False)
+                except Exception:
+                    pass
+            execution_done.set()
+
+    worker_thread = threading.Thread(
+        target=worker,
+        daemon=True,
+        name=f"AgentStream-{agent.id}",
+    )
+    # Register RuntimeThread so visiting or checking the agent inspects this exact thread
+    agent_runtime.register_runtime_thread(
+        agent_id=agent.id,
+        thread=worker_thread,
+        cancel_event=cancel_event,
+        task_prompt=run_in.prompt,
+    )
+    worker_thread.start()
+
+    last_ping = time.time()
+    try:
+        while not execution_done.is_set() or not event_queue.empty():
+            try:
+                ev = event_queue.get(timeout=0.25)
+                yield f"data: {json.dumps(ev, default=str)}\n\n"
+            except queue.Empty:
+                pass
+
+            # Send SSE keep-alive heartbeat comment every 5 seconds to prevent browser/proxy timeouts
+            now = time.time()
+            if now - last_ping >= 5.0:
+                yield ": keep-alive\n\n"
+                last_ping = now
+
+        yield "data: [DONE]\n\n"
+
+    except GeneratorExit:
+        logger.info("Client disconnected from SSE stream for agent %s. Cancelling RuntimeThread.", agent.id)
+        agent_runtime.stop_agent_execution(agent.id)
+        with SessionLocal() as stop_db:
+            try:
+                model.set_agent_running(db=stop_db, agent_id=agent.id, is_running=False)
+                model.stop_runtime_instance(db=stop_db, agent_id=agent.id)
+            except Exception:
+                pass
 
 
 def stop_agent_controller(
@@ -177,6 +307,9 @@ def stop_agent_controller(
             detail="Agent not found",
         )
 
+    # Halt the RuntimeThread
+    agent_runtime.stop_agent_execution(agent.id)
+
     # Mark agent as stopped
     model.set_agent_stopped(db=db, agent_id=agent.id)
 
@@ -189,6 +322,7 @@ def stop_agent_controller(
         message=f"Execution for agent '{agent.name}' stopped successfully",
         stopped_at=datetime.now(timezone.utc),
     )
+
 
 
 def get_running_agents_controller(

@@ -6,13 +6,17 @@ Provides functions and a client class to:
 2. Send chat completion and generation requests to a selected model.
 """
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 from openai import APIConnectionError, APIError, OpenAI
-from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionChunk,
+    ChatCompletionMessageParam,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +104,7 @@ def get_running_models_details(
 
 def request_model(
     model: str,
-    messages: list[dict[str, str]] | str,
+    messages: Iterable[ChatCompletionMessageParam] | list[dict[str, Any]] | str,
     base_url: str = DEFAULT_BASE_URL,
     api_key: str = DEFAULT_API_KEY,
     temperature: float = 0.7,
@@ -130,20 +134,22 @@ def request_model(
     cli = client or get_client(base_url=base_url, api_key=api_key)
 
     # Normalize messages argument
-    formatted_messages: list[dict[str, str]] = []
+    formatted_messages: list[ChatCompletionMessageParam] = []
     if isinstance(messages, str):
         if system_prompt:
             formatted_messages.append({"role": "system", "content": system_prompt})
         formatted_messages.append({"role": "user", "content": messages})
     else:
-        formatted_messages = list(messages)
-        if system_prompt and not any(m.get("role") == "system" for m in formatted_messages):
+        formatted_messages = list(cast(Iterable[ChatCompletionMessageParam], messages))
+        if system_prompt and not any(
+            isinstance(m, dict) and m.get("role") == "system" for m in formatted_messages
+        ):
             formatted_messages.insert(0, {"role": "system", "content": system_prompt})
 
     try:
         return cli.chat.completions.create(
             model=model,
-            messages=formatted_messages,  # type: ignore[arg-type]
+            messages=formatted_messages,
             temperature=temperature,
             max_tokens=max_tokens,
             stream=stream,
@@ -184,7 +190,7 @@ class LlamaCppClient:
     def request_model(
         self,
         model: str,
-        messages: list[dict[str, str]] | str,
+        messages: Iterable[ChatCompletionMessageParam] | list[dict[str, Any]] | str,
         temperature: float = 0.7,
         max_tokens: int | None = 512,
         stream: bool = False,
@@ -225,8 +231,9 @@ class LlamaCppClient:
         if isinstance(response, ChatCompletion) and response.choices:
             msg = response.choices[0].message
             content = msg.content or ""
-            if not content and hasattr(msg, "reasoning_content") and msg.reasoning_content:
-                content = msg.reasoning_content
+            reasoning = getattr(msg, "reasoning_content", None)
+            if not content and reasoning:
+                content = str(reasoning)
             return content
         return ""
 
@@ -249,12 +256,13 @@ class LlamaCppClient:
             stream=True,
             **kwargs,
         )
-        for chunk in stream:  # type: ignore[union-attr]
-            if isinstance(chunk, ChatCompletionChunk) and chunk.choices:
-                delta = chunk.choices[0].delta
-                delta_content = delta.content or getattr(delta, "reasoning_content", None)
-                if delta_content:
-                    yield delta_content
+        if isinstance(stream, Iterator):
+            for chunk in stream:
+                if isinstance(chunk, ChatCompletionChunk) and chunk.choices:
+                    delta = chunk.choices[0].delta
+                    delta_content = delta.content or getattr(delta, "reasoning_content", None)
+                    if delta_content:
+                        yield delta_content
 
 
 def chat(

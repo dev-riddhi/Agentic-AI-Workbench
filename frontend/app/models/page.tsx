@@ -78,6 +78,8 @@ export default function ModelsPage() {
 
   // Local Device Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCustomName, setUploadCustomName] = useState('');
+  const [uploadCustomQuant, setUploadCustomQuant] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -194,6 +196,9 @@ export default function ModelsPage() {
 
     setUploadError(null);
     setUploadFile(file);
+    if (!uploadCustomName) {
+      setUploadCustomName(file.name.replace(/\.gguf$/i, ''));
+    }
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
@@ -208,17 +213,27 @@ export default function ModelsPage() {
     setUploadError(null);
 
     try {
-      const created = await modelsApi.uploadModel(uploadFile, (progressEvent) => {
-        if (progressEvent.total) {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(percent);
+      const created = await modelsApi.uploadModel(
+        uploadFile,
+        uploadCustomName.trim() || undefined,
+        uploadCustomQuant.trim() || undefined,
+        (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+          }
         }
-      });
+      );
 
-      setModels((prev) => [created, ...prev]);
+      setModels((prev) => [created, ...prev.filter((m) => m.id !== created.id)]);
+      modelsApi.getModels().then((data) => {
+        if (data && data.length) setModels(data);
+      }).catch(() => {});
       setUploadSuccess(true);
       toast.success(`Model "${created.name}" uploaded successfully and ready for runtime execution!`, 'Model Uploaded');
       setUploadFile(null);
+      setUploadCustomName('');
+      setUploadCustomQuant('');
 
       setTimeout(() => {
         setUploadSuccess(false);
@@ -493,6 +508,7 @@ export default function ModelsPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileSelect(file);
+                e.target.value = '';
               }}
               className="hidden"
             />
@@ -530,32 +546,63 @@ export default function ModelsPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-zinc-950 border border-cyan-500/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-zinc-100 truncate">
-                      {uploadFile.name}
+              <div className="space-y-4">
+                <div className="p-4 rounded-xl bg-zinc-950 border border-cyan-500/30 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0">
+                      <FileText className="w-5 h-5" />
                     </div>
-                    <div className="text-[11px] text-zinc-500 font-mono">
-                      Size: {formatFileSize(uploadFile.size)}
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-zinc-100 truncate">
+                        {uploadFile.name}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 font-mono">
+                        Size: {formatFileSize(uploadFile.size)}
+                      </div>
                     </div>
                   </div>
+
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={() => {
+                      setUploadFile(null);
+                      setUploadCustomName('');
+                      setUploadCustomQuant('');
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  disabled={isUploading}
-                  onClick={() => {
-                    setUploadFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }}
-                  className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase mb-1.5">
+                      Model Designation (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadCustomName}
+                      onChange={(e) => setUploadCustomName(e.target.value)}
+                      placeholder="Auto-detected from GGUF"
+                      className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-mono font-semibold text-zinc-300 uppercase mb-1.5">
+                      Quantization (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadCustomQuant}
+                      onChange={(e) => setUploadCustomQuant(e.target.value)}
+                      placeholder="e.g. Q4_K_M (Auto-detected)"
+                      className="w-full px-3.5 py-2 rounded-xl bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -587,6 +634,7 @@ export default function ModelsPage() {
             )}
 
             <Button
+              type="submit"
               variant="primary"
               size="lg"
               disabled={isUploading || !uploadFile}
@@ -727,6 +775,7 @@ export default function ModelsPage() {
             </label>
 
             <Button
+              type="submit"
               variant="primary"
               size="lg"
               disabled={isDownloading}

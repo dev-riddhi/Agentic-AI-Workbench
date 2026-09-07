@@ -12,6 +12,7 @@ class SettingsData(BaseModel):
     environment: str = "development"
     default_timeout_seconds: int = Field(default=60, ge=1)
     maintenance_mode: bool = False
+    is_testing: bool = False
     extra_values: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="allow")
@@ -24,6 +25,7 @@ class SettingsUpdate(BaseModel):
     environment: str | None = None
     default_timeout_seconds: int | None = Field(default=None, ge=1)
     maintenance_mode: bool | None = None
+    is_testing: bool | None = None
     extra_values: dict[str, Any] | None = None
 
     model_config = ConfigDict(extra="allow")

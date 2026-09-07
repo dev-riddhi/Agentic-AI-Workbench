@@ -10,20 +10,31 @@ from pathlib import Path
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def get_file_metadata(
     file_path: str,
     compute_checksum: bool = True,
 ) -> dict[str, Any]:
-    """Retrieves detailed metadata for a file or directory.
+    """Retrieves detailed metadata for a file or directory inside uploads.
 
     Args:
-        file_path: Path to the target file or directory.
+        file_path: Path to the target file or directory inside uploads.
         compute_checksum: If True and target is a file (< 200MB), computes SHA-256 hash.
 
     Returns:
         dict: Detailed metadata attributes.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
+
     if not path.exists():
         return {
             "success": False,

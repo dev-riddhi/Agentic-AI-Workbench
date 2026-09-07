@@ -11,18 +11,21 @@ import time
 from typing import Any
 
 
+from app.tools.file_security import get_upload_dir, resolve_safe_path
+
+
 def python_execution(
     code: str,
     timeout_seconds: int = 30,
     working_directory: str | None = None,
     env_vars: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Executes Python code in a separate subprocess.
+    """Executes Python code in a separate subprocess inside the uploads directory.
 
     Args:
         code: Python source code string to execute.
         timeout_seconds: Maximum allowed execution time in seconds (default: 30).
-        working_directory: Optional working directory for the execution.
+        working_directory: Optional working directory inside uploads for the execution.
         env_vars: Optional environment variable overrides.
 
     Returns:
@@ -41,7 +44,17 @@ def python_execution(
     if env_vars:
         env.update(env_vars)
 
-    cwd = Path(working_directory).resolve() if working_directory else Path.cwd()
+    try:
+        if working_directory:
+            cwd = resolve_safe_path(working_directory, default_to_root=True)
+        else:
+            cwd = get_upload_dir()
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "exit_code": -1,
+        }
 
     # Create temporary script file to execute cleanly
     with tempfile.NamedTemporaryFile(

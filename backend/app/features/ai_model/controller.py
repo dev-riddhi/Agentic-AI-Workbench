@@ -254,17 +254,27 @@ def upload_ai_model_controller(
         else:
             friendly_name = model_name
 
+        # Release file memory map
+        del reader
+
     except Exception as exc:
         logger.warning("Failed to extract GGUFReader metadata for '%s': %s", file_path, exc)
         base_name = safe_filename[:-5] if safe_filename.lower().endswith(".gguf") else safe_filename
         quant = extract_quantization(safe_filename) or "CUSTOM"
         friendly_name = f"{base_name} ({quant})" if quant and quant not in base_name else base_name
 
-    # Check if model is already registered
-    existing_model = model.get_ai_model_by_repo_and_file(
+    # Override with caller-provided name or quantization if explicitly passed
+    if name and name.strip():
+        friendly_name = name.strip()
+    if quantization and quantization.strip():
+        quant = quantization.strip().upper()
+
+    # Check if model is already registered by filename, file_path, or repo_id
+    existing_model = model.get_ai_model_by_filename_or_path(
         db=db,
-        repo_id=repo_id,
         filename=safe_filename,
+        file_path=file_path,
+        repo_id=repo_id,
     )
     if existing_model:
         existing_model.name = friendly_name

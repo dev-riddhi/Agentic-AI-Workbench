@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def write_create_file(
     file_path: str,
     content: str,
@@ -14,10 +17,10 @@ def write_create_file(
     encoding: str = "utf-8",
     overwrite: bool = True,
 ) -> dict[str, Any]:
-    """Writes content to a file, creating directories automatically.
+    """Writes content to a file inside the uploads directory.
 
     Args:
-        file_path: Absolute or relative path to the destination file.
+        file_path: Path to the destination file inside the uploads directory.
         content: Text content to write.
         mode: Write mode: 'w' for overwrite/create, 'a' for append (default: 'w').
         encoding: File character encoding (default: 'utf-8').
@@ -26,7 +29,14 @@ def write_create_file(
     Returns:
         dict: Result containing 'success', 'file_path', 'bytes_written', and 'created'.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
 
     if not overwrite and mode == "w" and path.exists():
         return {

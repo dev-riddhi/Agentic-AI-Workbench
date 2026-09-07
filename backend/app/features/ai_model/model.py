@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from database.models import AIModel
@@ -62,6 +62,21 @@ def get_ai_model_by_repo_and_file(
         AIModel.filename == filename,
     )
     return db.scalar(statement)
+
+
+def get_ai_model_by_filename_or_path(
+    db: Session,
+    filename: str,
+    file_path: str | None = None,
+    repo_id: str | None = None,
+) -> AIModel | None:
+    conditions = [AIModel.filename == filename]
+    if file_path:
+        conditions.append(AIModel.file_path == file_path)
+    if repo_id:
+        conditions.append((AIModel.repo_id == repo_id) & (AIModel.filename == filename))
+    statement = select(AIModel).where(or_(*conditions))
+    return db.scalars(statement).first()
 
 
 def update_ai_model_status(
