@@ -13,4 +13,3 @@ alembic/versions/*
 !alembic/versions/.gitkeep
 *.log
 .env
-.env.*
