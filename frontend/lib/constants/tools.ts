@@ -21,6 +21,7 @@ import {
   Database,
   Mail,
   FolderClosed,
+  BellRing,
   LucideIcon,
 } from 'lucide-react';
 
@@ -273,6 +274,16 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     riskLevel: 'medium',
     parametersHint: 'to, subject, body',
     icon: Mail,
+  },
+  {
+    id: 'system_notification',
+    name: 'system_notification',
+    displayName: 'System Notification',
+    category: 'legacy',
+    description: 'Displays a live alert notification toast in the frontend interface and records it in the notification center.',
+    riskLevel: 'safe',
+    parametersHint: 'message, title, type',
+    icon: BellRing,
   },
 ];
 

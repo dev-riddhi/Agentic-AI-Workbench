@@ -3,7 +3,7 @@ Manages scheduled/triggered execution of agents, coordinating model calls,
 parsing JSON tool calls, executing assigned tools, and feeding results back into the conversation history.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 import re
@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -845,6 +845,29 @@ class AgentRuntime:
                         print(f"🧹 [TASK: RUNTIME DEREGISTRATION] Cleared active instance record from database.")
                 except Exception as e:
                     logger.error("Error clearing runtime record for agent %s: %s", agent_id, e)
+
+            # Record final output in agent_actions table
+            try:
+                with SessionLocal() as db:
+                    from database.models.agent_action import AgentAction
+                    action_record = AgentAction(
+                        id=uuid4(),
+                        agent_id=agent_id if isinstance(agent_id, UUID) else UUID(str(agent_id)),
+                        agent_name=agent_name,
+                        execution_id=str(uuid4()),
+                        prompt=initial_prompt,
+                        final_output=final_answer or "Execution concluded.",
+                        status="completed" if ("Error calling model" not in (final_answer or "")) else "failed",
+                        tool_calls_count=tool_call_count,
+                        tool_calls=json.dumps(executed_tool_calls, default=str),
+                        execution_time_seconds=round(time.time() - start_time, 2),
+                        created_at=datetime.now(timezone.utc),
+                    )
+                    db.add(action_record)
+                    db.commit()
+                    logger.info("Recorded agent final output in agent_actions table (ID: %s)", action_record.id)
+            except Exception as action_err:
+                logger.error("Failed to record agent action for agent %s: %s", agent_id, action_err)
 
 
             if print_to_terminal:

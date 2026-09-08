@@ -25,6 +25,7 @@ from app.tools.download_files import download_files
 from app.tools.file_security import get_upload_dir, resolve_safe_path
 from app.tools.query_apis import query_apis
 from app.tools.python_execution import python_execution
+from app.tools.system_notification import system_notification
 
 
 class ToolFunctionDict(dict):
@@ -764,6 +765,67 @@ TOOLS: list[dict[str, Any]] = [
                 'type': 'object'},
         ),
     },
+    {
+        "type": "function",
+        "system_notification": system_notification,
+        "name": "system_notification",
+        "callable": system_notification,
+        "handler": system_notification,
+        "description": "Displays a real-time notification alert toast in the frontend interface for the operator, and records it in the workbench notification center.",
+        "parameters": {
+            "properties": {
+                "message": {
+                    "description": "Notification body message text to display to the user.",
+                    "type": "string",
+                },
+                "title": {
+                    "default": "Agent Notification",
+                    "description": "Optional title header for the notification alert.",
+                    "type": "string",
+                },
+                "type": {
+                    "default": "info",
+                    "description": "Notification visual style: 'info', 'success', 'warning', or 'error'.",
+                    "type": "string",
+                },
+                "level": {
+                    "description": "Optional alias for type ('info', 'success', 'warning', 'error').",
+                    "type": "string",
+                },
+            },
+            "required": ["message"],
+            "type": "object",
+        },
+        "function": ToolFunctionDict(
+            system_notification,
+            name="system_notification",
+            description="Displays a real-time notification alert toast in the frontend interface for the operator, and records it in the workbench notification center.",
+            parameters={
+                "properties": {
+                    "message": {
+                        "description": "Notification body message text to display to the user.",
+                        "type": "string",
+                    },
+                    "title": {
+                        "default": "Agent Notification",
+                        "description": "Optional title header for the notification alert.",
+                        "type": "string",
+                    },
+                    "type": {
+                        "default": "info",
+                        "description": "Notification visual style: 'info', 'success', 'warning', or 'error'.",
+                        "type": "string",
+                    },
+                    "level": {
+                        "description": "Optional alias for type ('info', 'success', 'warning', 'error').",
+                        "type": "string",
+                    },
+                },
+                "required": ["message"],
+                "type": "object",
+            },
+        ),
+    },
 ]
 
 # Static list of dicts where key is tool name and value is the callable function
@@ -787,6 +849,7 @@ TOOLS_NAME: list[dict[str, Callable[..., dict[str, Any]]]] = [
     {"download_files": download_files},
     {"query_apis": query_apis},
     {"python_execution": python_execution},
+    {"system_notification": system_notification},
 ]
 
 # Aliases for flexible runtime consumption
@@ -865,6 +928,7 @@ __all__ = [
     "download_files",
     "query_apis",
     "python_execution",
+    "system_notification",
     "get_upload_dir",
     "resolve_safe_path",
 ]

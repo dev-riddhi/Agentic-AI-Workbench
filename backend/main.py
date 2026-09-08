@@ -7,12 +7,20 @@ from fastapi import FastAPI
 
 from app.features.agents.model import get_running_agents
 from app.router import router
-from database.database import SessionLocal
+from database.database import SessionLocal, init_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Ensure tables are created
+init_db()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

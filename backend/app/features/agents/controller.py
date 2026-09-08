@@ -353,3 +353,68 @@ def get_available_tools_controller() -> list[dict[str, Any]]:
         }
         for t in TOOLS
     ]
+
+
+def get_agent_actions_controller(
+    db: Session,
+    agent_id: UUID,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    agent = model.get_agent(db=db, agent_id=agent_id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+    actions = model.get_agent_actions(db=db, agent_id=agent_id, limit=limit)
+    res = []
+    for a in actions:
+        t_calls = None
+        if a.tool_calls:
+            try:
+                t_calls = json.loads(a.tool_calls) if isinstance(a.tool_calls, str) else a.tool_calls
+            except Exception:
+                t_calls = []
+        res.append({
+            "id": a.id,
+            "agent_id": a.agent_id,
+            "agent_name": a.agent_name,
+            "execution_id": a.execution_id,
+            "prompt": a.prompt,
+            "final_output": a.final_output,
+            "status": a.status,
+            "tool_calls_count": a.tool_calls_count,
+            "tool_calls": t_calls,
+            "execution_time_seconds": a.execution_time_seconds,
+            "created_at": a.created_at,
+        })
+    return res
+
+
+def get_latest_agent_actions_controller(
+    db: Session,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    actions = model.get_latest_agent_actions(db=db, limit=limit)
+    res = []
+    for a in actions:
+        t_calls = None
+        if a.tool_calls:
+            try:
+                t_calls = json.loads(a.tool_calls) if isinstance(a.tool_calls, str) else a.tool_calls
+            except Exception:
+                t_calls = []
+        res.append({
+            "id": a.id,
+            "agent_id": a.agent_id,
+            "agent_name": a.agent_name,
+            "execution_id": a.execution_id,
+            "prompt": a.prompt,
+            "final_output": a.final_output,
+            "status": a.status,
+            "tool_calls_count": a.tool_calls_count,
+            "tool_calls": t_calls,
+            "execution_time_seconds": a.execution_time_seconds,
+            "created_at": a.created_at,
+        })
+    return res

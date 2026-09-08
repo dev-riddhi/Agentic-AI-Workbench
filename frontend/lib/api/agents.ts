@@ -5,6 +5,7 @@ import {
   AgentUpdatePayload,
   AgentRunResponse,
   DocumentResponse,
+  AgentActionRecord,
 } from './types';
 
 export const agentsApi = {
@@ -173,6 +174,20 @@ export const agentsApi = {
     task_prompt?: string | null;
   }> => {
     const response = await apiClient.get(`/agents/${id}/thread-status`);
+    return response.data;
+  },
+
+  getAgentActions: async (id: string, limit: number = 50): Promise<AgentActionRecord[]> => {
+    const response = await apiClient.get<AgentActionRecord[]>(`/agents/${id}/actions`, {
+      params: { limit },
+    });
+    return response.data;
+  },
+
+  getLatestActions: async (limit: number = 50): Promise<AgentActionRecord[]> => {
+    const response = await apiClient.get<AgentActionRecord[]>('/agents/actions/latest', {
+      params: { limit },
+    });
     return response.data;
   },
 };

@@ -259,3 +259,31 @@ def get_active_runtimes(
     return list(db.scalars(statement).all())
 
 
+def get_agent_actions(
+    db: Session,
+    agent_id: UUID,
+    limit: int = 50,
+) -> list:
+    from database.models.agent_action import AgentAction
+    statement = (
+        select(AgentAction)
+        .where(AgentAction.agent_id == agent_id)
+        .order_by(AgentAction.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(statement).all())
+
+
+def get_latest_agent_actions(
+    db: Session,
+    limit: int = 50,
+) -> list:
+    from database.models.agent_action import AgentAction
+    statement = (
+        select(AgentAction)
+        .order_by(AgentAction.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(statement).all())
+
+

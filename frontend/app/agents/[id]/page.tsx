@@ -20,8 +20,11 @@ import {
   ChevronRight,
   Terminal,
   ExternalLink,
+  Activity,
+  CheckCircle2,
+  RotateCw,
 } from 'lucide-react';
-import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger } from '@/lib/api/types';
+import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger, AgentActionRecord } from '@/lib/api/types';
 import { agentsApi } from '@/lib/api/agents';
 import { modelsApi } from '@/lib/api/models';
 import { documentsApi } from '@/lib/api/documents';
@@ -60,11 +63,32 @@ export default function AgentWorkspacePage({
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
 
-  const [activeTab, setActiveTab] = useState<'chat' | 'config' | 'tools' | 'knowledge'>(
-    initialTab === 'config' || initialTab === 'tools' || initialTab === 'knowledge'
+  const [activeTab, setActiveTab] = useState<'chat' | 'config' | 'tools' | 'knowledge' | 'actions'>(
+    initialTab === 'config' || initialTab === 'tools' || initialTab === 'knowledge' || initialTab === 'actions'
       ? initialTab
       : 'chat'
   );
+
+  const [actions, setActions] = useState<AgentActionRecord[]>([]);
+  const [isLoadingActions, setIsLoadingActions] = useState(false);
+
+  const fetchActions = React.useCallback(async () => {
+    setIsLoadingActions(true);
+    try {
+      const data = await agentsApi.getAgentActions(id);
+      setActions(data || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingActions(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'actions') {
+      fetchActions();
+    }
+  }, [activeTab, fetchActions]);
 
 
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -627,6 +651,19 @@ export default function AgentWorkspacePage({
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Knowledge ({agent.documents?.length || 0})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('actions')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'actions'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Actions & Outputs</span>
             </button>
           </div>
 
@@ -1372,6 +1409,148 @@ export default function AgentWorkspacePage({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* --- TAB: ACTIONS & OUTPUTS --- */}
+      {activeTab === 'actions' && (
+        <div className="p-6 max-w-5xl mx-auto space-y-6 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+            <div>
+              <h2 className="text-base font-bold text-zinc-100 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400" />
+                <span>Agent Actions & Final Output Records</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Persistent execution records stored in the <code className="text-cyan-400 font-mono">agent_actions</code> database table.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={fetchActions}
+              disabled={isLoadingActions}
+              leftIcon={<RotateCw className={`w-3.5 h-3.5 ${isLoadingActions ? 'animate-spin' : ''}`} />}
+            >
+              Refresh
+            </Button>
+          </div>
+
+          {isLoadingActions ? (
+            <div className="space-y-4">
+              {[1, 2].map((k) => (
+                <div key={k} className="p-5 rounded-2xl bg-zinc-900/50 border border-zinc-800 animate-pulse space-y-3">
+                  <div className="h-4 bg-zinc-800 rounded w-1/4" />
+                  <div className="h-16 bg-zinc-800/60 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : actions.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-zinc-900/30 border border-zinc-800/80 space-y-3">
+              <Activity className="w-8 h-8 text-zinc-600 mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-zinc-300">No Execution Records Yet</p>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                  Run this agent to generate execution actions and final output records in the database.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setActiveTab('chat')}
+                leftIcon={<Play className="w-3.5 h-3.5" />}
+              >
+                Run Agent Now
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {actions.map((act) => {
+                const isCompleted = act.status === 'completed';
+                return (
+                  <div
+                    key={act.id}
+                    className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 shadow-lg space-y-4 transition-all hover:border-zinc-700/80"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800/60 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold font-mono ${
+                            isCompleted
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          }`}
+                        >
+                          {isCompleted ? <CheckCircle2 className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                          <span className="capitalize">{act.status}</span>
+                        </span>
+                        <span className="text-xs text-zinc-400 font-mono">
+                          {act.tool_calls_count} {act.tool_calls_count === 1 ? 'Tool Call' : 'Tool Calls'}
+                        </span>
+                        {act.execution_time_seconds !== null && act.execution_time_seconds !== undefined && (
+                          <span className="text-xs text-zinc-500 font-mono">
+                            · {act.execution_time_seconds.toFixed(1)}s
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        {new Date(act.created_at).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {act.prompt && (
+                      <div className="space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                          Prompt / Task
+                        </div>
+                        <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                          {act.prompt}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 font-mono">
+                        <span>Final Output Record</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(act.final_output);
+                            toast.success('Final output copied to clipboard');
+                          }}
+                          className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 normal-case cursor-pointer"
+                        >
+                          <Copy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </button>
+                      </div>
+                      <div className="p-4 rounded-xl bg-zinc-950 border border-cyan-500/20 text-xs text-zinc-100 whitespace-pre-wrap font-sans leading-relaxed">
+                        {act.final_output}
+                      </div>
+                    </div>
+
+                    {act.tool_calls && Array.isArray(act.tool_calls) && act.tool_calls.length > 0 && (
+                      <details className="text-xs text-zinc-400">
+                        <summary className="cursor-pointer hover:text-zinc-200 font-mono text-[11px]">
+                          View {act.tool_calls.length} Tool Execution Traces
+                        </summary>
+                        <div className="mt-2 p-3 rounded-xl bg-zinc-950/80 border border-zinc-800/80 font-mono text-[11px] space-y-2 overflow-x-auto max-h-60 overflow-y-auto">
+                          {act.tool_calls.map((tc, tcIdx) => (
+                            <div key={tcIdx} className="border-b border-zinc-800/60 pb-2 last:border-0 last:pb-0">
+                              <span className="text-cyan-400 font-semibold">{tc.name || 'tool'}</span>
+                              <pre className="text-[10px] text-zinc-400 mt-1 overflow-x-auto">
+                                {JSON.stringify(tc.result || tc.arguments, null, 2)}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

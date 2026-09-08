@@ -15,6 +15,7 @@ from app.features.agents.schemas import (
     AgentUpdate,
     AvailableToolResponse,
     DocumentResponse,
+    AgentActionResponse,
 )
 from app.features.user.controller import get_optional_current_user
 from database.database import get_db
@@ -78,6 +79,16 @@ def get_available_tools(
     current_user: User | None = Depends(get_optional_current_user),
 ):
     return controller.get_available_tools_controller()
+
+
+@router.get("/actions/latest", response_model=list[AgentActionResponse], status_code=status.HTTP_200_OK)
+def get_latest_agent_actions(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
+):
+    """Retrieves the latest executed agent actions and final output records across all agents."""
+    return controller.get_latest_agent_actions_controller(db=db, limit=limit)
 
 
 @router.get("/{id}", response_model=AgentResponse, status_code=status.HTTP_200_OK)
@@ -180,5 +191,16 @@ def get_agent_thread_status(
 ):
     """Retrieves the live RuntimeThread status for the agent."""
     return controller.get_agent_thread_status_controller(agent_id=id)
+
+
+@router.get("/{id}/actions", response_model=list[AgentActionResponse], status_code=status.HTTP_200_OK)
+def get_agent_actions(
+    id: UUID,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_current_user),
+):
+    """Retrieves executed agent actions and final output records for a specific agent."""
+    return controller.get_agent_actions_controller(db=db, agent_id=id, limit=limit)
 
 

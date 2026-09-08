@@ -189,3 +189,19 @@ class AgentStopResponse(BaseModel):
     status: str = "stopped"
     message: str = "Agent execution stopped successfully"
     stopped_at: datetime
+
+
+class AgentActionResponse(BaseModel):
+    id: UUID
+    agent_id: UUID | None = None
+    agent_name: str | None = None
+    execution_id: str | None = None
+    prompt: str | None = None
+    final_output: str
+    status: str = "completed"
+    tool_calls_count: int = 0
+    tool_calls: list[dict[str, Any]] | None = None
+    execution_time_seconds: float | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -260,3 +260,22 @@ export interface SettingsUpdatePayload {
   extra_values?: Record<string, unknown>;
   [key: string]: unknown;
 }
+
+export interface AgentActionRecord {
+  id: string;
+  agent_id?: string | null;
+  agent_name?: string | null;
+  execution_id?: string | null;
+  prompt?: string | null;
+  final_output: string;
+  status: string;
+  tool_calls_count: number;
+  tool_calls?: Array<{
+    name?: string;
+    arguments?: Record<string, unknown>;
+    result?: unknown;
+    status?: string;
+  }> | null;
+  execution_time_seconds?: number | null;
+  created_at: string;
+}
