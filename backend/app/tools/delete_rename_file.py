@@ -8,25 +8,44 @@ import shutil
 from typing import Any
 
 
+from app.tools.file_security import get_upload_dir, resolve_safe_path
+
+
 def delete_rename_file(
     action: str,
     source_path: str,
     target_path: str | None = None,
     recursive: bool = False,
 ) -> dict[str, Any]:
-    """Deletes or renames/moves a file or directory.
+    """Deletes or renames/moves a file or directory inside the uploads directory.
 
     Args:
         action: Either 'delete' or 'rename' (or 'move').
-        source_path: Path to the target file or directory.
-        target_path: Destination path (required for 'rename'/'move').
+        source_path: Path to the target file or directory inside uploads.
+        target_path: Destination path inside uploads (required for 'rename'/'move').
         recursive: If True, allow recursive deletion of non-empty directories.
 
     Returns:
         dict: Result containing 'success', 'action', and paths.
     """
-    src = Path(source_path).resolve()
+    try:
+        src = resolve_safe_path(source_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "source_path": str(source_path),
+        }
+
     act = action.strip().lower()
+    upload_root = get_upload_dir()
+
+    if src == upload_root:
+        return {
+            "success": False,
+            "error": "Operation prohibited: Cannot delete or move the root uploads directory.",
+            "source_path": str(src),
+        }
 
     if not src.exists():
         return {
@@ -58,7 +77,22 @@ def delete_rename_file(
                     "source_path": str(src),
                 }
 
-            dst = Path(target_path).resolve()
+            try:
+                dst = resolve_safe_path(target_path)
+            except (PermissionError, ValueError) as err:
+                return {
+                    "success": False,
+                    "error": str(err),
+                    "source_path": str(src),
+                }
+
+            if dst == upload_root:
+                return {
+                    "success": False,
+                    "error": "Cannot overwrite or rename into the root uploads directory itself.",
+                    "source_path": str(src),
+                }
+
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst))
 

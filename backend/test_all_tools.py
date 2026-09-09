@@ -25,16 +25,18 @@ from app.tools import (
     download_files,
     query_apis,
     python_execution,
+    system_notification,
     run_tool,
 )
 
 
 def run_tests():
     print(f"=== Testing Tools Registry: {len(TOOLS)} Tools Registered ===")
-    assert len(TOOLS) == 19, f"Expected 19 tools, got {len(TOOLS)}"
-    assert len(TOOLS_MAP) == 19, f"Expected 19 tools in TOOLS_MAP, got {len(TOOLS_MAP)}"
+    assert len(TOOLS) == 20, f"Expected 20 tools, got {len(TOOLS)}"
+    assert len(TOOLS_MAP) == 20, f"Expected 20 tools in TOOLS_MAP, got {len(TOOLS_MAP)}"
 
     temp_dir = tempfile.mkdtemp(prefix="workbench_tools_test_")
+    os.environ["UPLOAD_DIR"] = temp_dir
     try:
         # 1. write_create_file
         test_file = os.path.join(temp_dir, "sub", "hello.txt")
@@ -177,8 +179,34 @@ def run_tests():
         assert py_res["success"] and "THE_ANSWER=42" in py_res["stdout"], f"python_execution failed: {py_res}"
         print("[OK] Tool 19: python_execution passed")
 
+        # 20. system_notification
+        notif_res = system_notification("Operation finished with status OK", title="Telemetry Alert", type="success")
+        assert notif_res["success"], f"system_notification failed: {notif_res}"
+        assert notif_res["notification_id"] and notif_res["displayed"] is True
+        print(f"[OK] Tool 20: system_notification passed (id: {notif_res['notification_id'][:8]}...)")
+
+        # Security: Verify that access outside the uploads folder is blocked
+        print("=== Verifying Security: Upload Sandbox Enforcement ===")
+        blocked_read = read_file("../main.py")
+        assert not blocked_read["success"] and "outside the permitted uploads directory" in blocked_read.get("error", ""), (
+            f"Security check failed, expected outside uploads error: {blocked_read}"
+        )
+        blocked_write = write_create_file("../../escaped.txt", "exploit")
+        assert not blocked_write["success"] and "outside the permitted uploads directory" in blocked_write.get("error", ""), (
+            f"Security check failed, expected outside uploads error: {blocked_write}"
+        )
+        blocked_meta = get_file_metadata("C:/Windows/System32/cmd.exe")
+        assert not blocked_meta["success"] and "outside the permitted uploads directory" in blocked_meta.get("error", ""), (
+            f"Security check failed, expected outside uploads error: {blocked_meta}"
+        )
+        blocked_del = delete_rename_file("delete", "../../backend")
+        assert not blocked_del["success"] and "outside the permitted uploads directory" in blocked_del.get("error", ""), (
+            f"Security check failed, expected outside uploads error: {blocked_del}"
+        )
+        print("[OK] Security Verification: Path traversal outside uploads folder strictly blocked!")
+
         print("\n==============================================")
-        print("ALL 19 COMMON AGENT TOOLS VALIDATED AND PASSED!")
+        print("ALL 20 COMMON AGENT TOOLS & SECURITY VALIDATED AND PASSED!")
         print("==============================================")
 
     finally:

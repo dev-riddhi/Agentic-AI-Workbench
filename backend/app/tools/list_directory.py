@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def list_directory(
     directory_path: str = ".",
     recursive: bool = False,
@@ -15,10 +18,10 @@ def list_directory(
     max_depth: int = 1,
     pattern: str | None = None,
 ) -> dict[str, Any]:
-    """Lists the contents of a directory.
+    """Lists the contents of a directory inside the uploads directory.
 
     Args:
-        directory_path: Path to the directory (default: current directory '.').
+        directory_path: Path to the directory inside uploads (default: '.' for uploads root).
         recursive: If True, recursively list subdirectories up to max_depth.
         include_hidden: If True, include hidden files starting with '.'.
         max_depth: Maximum directory recursion depth (default: 1).
@@ -27,7 +30,14 @@ def list_directory(
     Returns:
         dict: Result containing directory path, items list, and total count.
     """
-    root = Path(directory_path).resolve()
+    try:
+        root = resolve_safe_path(directory_path, default_to_root=True)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "directory": str(directory_path),
+        }
 
     if not root.exists():
         return {

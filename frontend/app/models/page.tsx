@@ -241,7 +241,9 @@ export default function ModelsPage() {
 
     setUploadError(null);
     setUploadFile(file);
-    setCustomUploadName(file.name.replace(/\.gguf$/i, ''));
+    if (!customUploadName) {
+      setCustomUploadName(file.name.replace(/\.gguf$/i, ''));
+    }
   };
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
@@ -276,6 +278,9 @@ export default function ModelsPage() {
       setCustomUploadQuant('');
 
       // Refresh server status and model inventory
+      modelsApi.getModels().then((data) => {
+        if (data && data.length) setModels(data);
+      }).catch(() => {});
       modelsApi.checkLlamaStatus().then((data) => {
         setServerStatus(data);
         if (data.models) setModels(data.models);
@@ -627,6 +632,7 @@ export default function ModelsPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleFileSelect(file);
+                e.target.value = '';
               }}
               className="hidden"
             />
@@ -684,6 +690,8 @@ export default function ModelsPage() {
                   disabled={isUploading}
                   onClick={() => {
                     setUploadFile(null);
+                    setCustomUploadName('');
+                    setCustomUploadQuant('');
                     if (fileInputRef.current) fileInputRef.current.value = '';
                   }}
                   className="p-1.5 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"

@@ -5,10 +5,12 @@ import logging
 import time
 import urllib.error
 import urllib.request
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,11 @@ logger = logging.getLogger(__name__)
 
 def _ensure_model_running(model: AIModel) -> None:
     """Ensures that the model server is actively running and ready to accept inference requests."""
+    from app.features.settings.model import get_is_testing
+
+    if get_is_testing():
+        return  # Bypass llama-server check when is_testing is True in settings table
+
     runtime_status = model_runtime.get_status()
     is_matching_model = False
     if runtime_status.get("running"):
@@ -231,60 +238,90 @@ def send_message_controller(
     now_iso = datetime.now(timezone.utc).isoformat()
     current_messages = list(conv.messages or [])
 
-    # Record user turn
-    current_messages.append({
-        "role": "user",
-        "content": user_text,
-        "timestamp": now_iso,
-    })
+    # Record user turn if not already recorded as the latest pending turn
+    if not (current_messages and current_messages[-1].get("role") == "user" and current_messages[-1].get("content") == user_text):
+        current_messages.append({
+            "role": "user",
+            "content": user_text,
+            "timestamp": now_iso,
+        })
+        conv.messages = current_messages
+        conv.updated_at = datetime.now(timezone.utc)
+        db.commit()
 
-    # Prepare payload for llama-server OpenAI API
-    api_messages = _build_api_messages(current_messages, req.system_prompt)
-    endpoint = f"http://{model_runtime.host}:{model_runtime.port}/v1/chat/completions"
-    payload = {
-        "messages": api_messages,
-        "max_tokens": req.max_tokens,
-        "temperature": req.temperature,
-    }
+    from app.features.settings.model import get_is_testing
+    is_testing = get_is_testing(db)
 
     start_t = time.time()
-    try:
-        data_bytes = json.dumps(payload).encode("utf-8")
-        http_req = urllib.request.Request(
-            endpoint,
-            data=data_bytes,
-            headers={"Content-Type": "application/json", "User-Agent": "Agentic-Workbench"},
-            method="POST",
-        )
-        with urllib.request.urlopen(http_req, timeout=60.0) as resp:
+    if is_testing:
+        from app.llm import gemini
+        try:
+            assistant_content = gemini.chat(
+                prompt=user_text,
+                system_prompt=req.system_prompt,
+                temperature=req.temperature,
+                max_tokens=req.max_tokens,
+            )
             elapsed_ms = round((time.time() - start_t) * 1000, 2)
-            res_json = json.loads(resp.read().decode("utf-8"))
-            assistant_content = ""
-            if "choices" in res_json and len(res_json["choices"]) > 0:
-                choice = res_json["choices"][0]
-                assistant_content = choice.get("message", {}).get("content", "")
-                if not assistant_content and choice.get("message", {}).get("reasoning_content"):
-                    assistant_content = choice.get("message", {}).get("reasoning_content", "")
-
-            # Record assistant turn
             current_messages.append({
                 "role": "assistant",
                 "content": assistant_content,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "latency_ms": elapsed_ms,
             })
-    except urllib.error.URLError as exc:
-        logger.error("Failed to query llama-server at %s: %s", endpoint, exc)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Inference error communicating with llama-server: {exc}",
-        )
-    except Exception as exc:
-        logger.error("Unexpected error in chat completion: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Model inference failed: {exc}",
-        )
+        except Exception as exc:
+            logger.error("Error in Gemini chat completion: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Gemini model inference failed: {exc}",
+            )
+    else:
+        # Prepare payload for llama-server OpenAI API
+        api_messages = _build_api_messages(current_messages, req.system_prompt)
+        endpoint = f"http://{model_runtime.host}:{model_runtime.port}/v1/chat/completions"
+        payload = {
+            "messages": api_messages,
+            "max_tokens": req.max_tokens,
+            "temperature": req.temperature,
+        }
+
+        try:
+            data_bytes = json.dumps(payload).encode("utf-8")
+            http_req = urllib.request.Request(
+                endpoint,
+                data=data_bytes,
+                headers={"Content-Type": "application/json", "User-Agent": "Agentic-Workbench"},
+                method="POST",
+            )
+            with urllib.request.urlopen(http_req, timeout=60.0) as resp:
+                elapsed_ms = round((time.time() - start_t) * 1000, 2)
+                res_json = json.loads(resp.read().decode("utf-8"))
+                assistant_content = ""
+                if "choices" in res_json and len(res_json["choices"]) > 0:
+                    choice = res_json["choices"][0]
+                    assistant_content = choice.get("message", {}).get("content", "")
+                    if not assistant_content and choice.get("message", {}).get("reasoning_content"):
+                        assistant_content = choice.get("message", {}).get("reasoning_content", "")
+
+                # Record assistant turn
+                current_messages.append({
+                    "role": "assistant",
+                    "content": assistant_content,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "latency_ms": elapsed_ms,
+                })
+        except urllib.error.URLError as exc:
+            logger.error("Failed to query llama-server at %s: %s", endpoint, exc)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Inference error communicating with llama-server: {exc}",
+            )
+        except Exception as exc:
+            logger.error("Unexpected error in chat completion: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Model inference failed: {exc}",
+            )
 
     # Auto-title conversation if default
     if conv.title and (conv.title.startswith("Chat with ") or conv.title == "New Conversation"):
@@ -350,15 +387,16 @@ def stream_message_controller(
         now_iso = datetime.now(timezone.utc).isoformat()
         current_messages = list(conv.messages or [])
 
-        # Record user turn
-        current_messages.append({
-            "role": "user",
-            "content": user_text,
-            "timestamp": now_iso,
-        })
-        conv.messages = current_messages
-        conv.updated_at = datetime.now(timezone.utc)
-        db.commit()
+        # Record user turn if not already recorded as the latest pending turn
+        if not (current_messages and current_messages[-1].get("role") == "user" and current_messages[-1].get("content") == user_text):
+            current_messages.append({
+                "role": "user",
+                "content": user_text,
+                "timestamp": now_iso,
+            })
+            conv.messages = current_messages
+            conv.updated_at = datetime.now(timezone.utc)
+            db.commit()
 
         # Capture variables for stream closure
         model_name = model.name
@@ -368,26 +406,41 @@ def stream_message_controller(
         base_url = f"http://{model_runtime.host}:{model_runtime.port}/v1"
 
     def event_generator() -> Generator[str, None, None]:
-        client = OpenAI(base_url=base_url, api_key="llama-cpp", timeout=120.0)
+        from app.features.settings.model import get_is_testing
+        is_testing = get_is_testing()
         accumulated_text = ""
         saved = False
         start_t = time.time()
+
         try:
-            stream = client.chat.completions.create(
-                model=model_name,
-                messages=api_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
-            for chunk in stream:
-                if not chunk.choices or len(chunk.choices) == 0:
-                    continue
-                delta = chunk.choices[0].delta
-                token = delta.content or getattr(delta, "reasoning_content", None) or ""
-                if token:
-                    accumulated_text += token
-                    yield f"data: {json.dumps({'token': token})}\n\n"
+            if is_testing:
+                from app.llm import gemini
+                for token in gemini.stream_chat(
+                    prompt=user_text,
+                    system_prompt=req.system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    if token:
+                        accumulated_text += token
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+            else:
+                client = OpenAI(base_url=base_url, api_key="llama-cpp", timeout=120.0)
+                stream = client.chat.completions.create(
+                    model=model_name,
+                    messages=cast(list[ChatCompletionMessageParam], api_messages),
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                for chunk in stream:
+                    if not chunk.choices or len(chunk.choices) == 0:
+                        continue
+                    delta = chunk.choices[0].delta
+                    token = delta.content or getattr(delta, "reasoning_content", None) or ""
+                    if token:
+                        accumulated_text += token
+                        yield f"data: {json.dumps({'token': token})}\n\n"
 
             # Stream finished naturally
             elapsed_ms = round((time.time() - start_t) * 1000, 2)

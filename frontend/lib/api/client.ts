@@ -27,7 +27,7 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
   failedQueue = [];
 };
 
-// Request interceptor: attach access token
+// Request interceptor: attach access token and handle FormData boundary
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (typeof window !== 'undefined') {
@@ -36,8 +36,13 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
-    // For multipart FormData, remove Content-Type so the browser sets the boundary automatically
-    if (config.data instanceof FormData && config.headers) {
+    // Delete Content-Type for FormData so Axios/browser sets multipart/form-data with boundary
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData && config.headers) {
+      if (typeof config.headers.delete === 'function') {
+        config.headers.delete('content-type');
+        config.headers.delete('Content-Type');
+      }
+      delete config.headers['content-type'];
       delete config.headers['Content-Type'];
     }
     return config;

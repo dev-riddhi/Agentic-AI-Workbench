@@ -13,6 +13,9 @@ DEFAULT_USER_AGENT = (
 )
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def download_files(
     url: str,
     destination_path: str,
@@ -20,11 +23,11 @@ def download_files(
     expected_sha256: str | None = None,
     timeout: float = 60.0,
 ) -> dict[str, Any]:
-    """Downloads a file from a URL to a specified local path.
+    """Downloads a file from a URL to a destination path inside the uploads directory.
 
     Args:
         url: Direct HTTP/HTTPS download link.
-        destination_path: Local file path where downloaded contents should be saved.
+        destination_path: Path inside uploads where downloaded contents should be saved.
         overwrite: If False and destination file already exists, aborts download.
         expected_sha256: Optional hex string to verify file integrity.
         timeout: Download timeout in seconds.
@@ -36,7 +39,15 @@ def download_files(
     if not clean_url.startswith(("http://", "https://")):
         clean_url = "https://" + clean_url
 
-    dest = Path(destination_path).resolve()
+    try:
+        dest = resolve_safe_path(destination_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(destination_path),
+        }
+
     if not overwrite and dest.exists():
         return {
             "success": False,

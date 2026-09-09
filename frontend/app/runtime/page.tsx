@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import {
   ActiveAgentRuntimeItem,
+  AgentRuntimeStatus,
   AIModelResponse,
   ModelRuntimeStatus,
   RuntimeOverviewResponse,
@@ -36,9 +37,11 @@ export default function RuntimePage() {
   
   // Overview & Agent Runtime state
   const [overview, setOverview] = useState<RuntimeOverviewResponse | null>(null);
+  const [agentRuntime, setAgentRuntime] = useState<AgentRuntimeStatus | null>(null);
   const [activeAgents, setActiveAgents] = useState<ActiveAgentRuntimeItem[]>([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [isStoppingAgentId, setIsStoppingAgentId] = useState<string | null>(null);
+  const [isTogglingAgentRuntime, setIsTogglingAgentRuntime] = useState(false);
 
   // Model Runtime state
   const [modelRuntime, setModelRuntime] = useState<ModelRuntimeStatus | null>(null);
@@ -86,6 +89,9 @@ export default function RuntimePage() {
           setOverview(ov.value);
           setModelRuntime(ov.value.model_runtime);
           setActiveAgents(ov.value.active_agents || []);
+          if (ov.value.agent_runtime) {
+            setAgentRuntime(ov.value.agent_runtime);
+          }
           if (ov.value.model_runtime.model_name) {
             const runningName = ov.value.model_runtime.model_name;
             setSelectedRuntimeModel((prev) => prev || runningName);
@@ -111,11 +117,14 @@ export default function RuntimePage() {
 
     loadAll();
 
-    // Regular polling ticker for active workers
+    // Regular polling ticker for agent runtime and model status
     const interval = setInterval(() => {
-      runtimeApi.getActiveAgents()
-        .then((agents) => {
-          if (active) setActiveAgents(agents || []);
+      runtimeApi.getAgentRuntimeStatus()
+        .then((st) => {
+          if (active && st) {
+            setAgentRuntime(st);
+            setActiveAgents(st.active_agents || []);
+          }
         })
         .catch(() => {});
 
@@ -139,11 +148,61 @@ export default function RuntimePage() {
       setOverview(ov);
       setModelRuntime(ov.model_runtime);
       setActiveAgents(ov.active_agents || []);
+      if (ov.agent_runtime) {
+        setAgentRuntime(ov.agent_runtime);
+      } else {
+        const agSt = await runtimeApi.getAgentRuntimeStatus().catch(() => null);
+        if (agSt) setAgentRuntime(agSt);
+      }
       toast.success('Runtime status synchronized.', 'Status Refreshed');
     } catch {
       toast.error('Failed to sync runtime status with backend.', 'Sync Failed');
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  const handleStartAgentRuntime = async () => {
+    setIsTogglingAgentRuntime(true);
+    try {
+      const st = await runtimeApi.startAgentScheduler();
+      setAgentRuntime(st);
+      setActiveAgents(st.active_agents || []);
+      toast.success('Agent Runtime scheduler loop is now running.', 'Agent Runtime Started');
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Failed to start agent runtime scheduler.';
+      toast.error(detail, 'Start Error');
+    } finally {
+      setIsTogglingAgentRuntime(false);
+    }
+  };
+
+  const handleStopAgentRuntime = async () => {
+    const ok = await confirm({
+      title: 'Stop Agent Runtime Scheduler',
+      message:
+        'Are you sure you want to stop the Agent Runtime? Automated triggers and periodic scheduled tasks will pause until restarted.',
+      confirmText: 'Yes, Stop Runtime',
+      cancelText: 'Cancel',
+      danger: true,
+    });
+    if (!ok) return;
+
+    setIsTogglingAgentRuntime(true);
+    try {
+      const st = await runtimeApi.stopAgentScheduler();
+      setAgentRuntime(st);
+      setActiveAgents(st.active_agents || []);
+      toast.info('Agent Runtime scheduler stopped. Periodic tasks paused.', 'Agent Runtime Stopped');
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Failed to stop agent runtime scheduler.';
+      toast.error(detail, 'Stop Error');
+    } finally {
+      setIsTogglingAgentRuntime(false);
     }
   };
 
@@ -294,19 +353,58 @@ export default function RuntimePage() {
       {/* Top Status Cards Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Agent Runtime Card */}
-        <div className="p-3.5 rounded-2xl bg-white/80 dark:bg-zinc-900/60 border border-zinc-200/90 dark:border-zinc-800/80 backdrop-blur-md shadow-sm flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shrink-0">
-            <Bot className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[10px] font-mono text-zinc-500 uppercase">Agent Runtime</div>
-            <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <span>{activeAgents.length} Active {activeAgents.length === 1 ? 'Worker' : 'Workers'}</span>
-              {activeAgents.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              )}
+        <div className="p-4 rounded-2xl bg-white/80 dark:bg-zinc-900/80 border border-zinc-200/90 dark:border-zinc-800 backdrop-blur-md flex items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                agentRuntime?.running
+                  ? 'bg-cyan-500/10 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400'
+                  : 'bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-500'
+              }`}
+            >
+              <Bot className="w-5 h-5" />
             </div>
-            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono truncate">Scheduler Loop: 60s</div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase">Agent Runtime</div>
+              <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                <span>{agentRuntime?.running ? 'Running' : 'Stopped'}</span>
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    agentRuntime?.running
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-zinc-400 dark:bg-zinc-500'
+                  }`}
+                />
+              </div>
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 font-mono truncate">
+                {activeAgents.length} {activeAgents.length === 1 ? 'Worker' : 'Workers'} • Loop: 60s
+              </div>
+            </div>
+          </div>
+          <div>
+            {agentRuntime?.running ? (
+              <button
+                type="button"
+                disabled={isTogglingAgentRuntime}
+                onClick={handleStopAgentRuntime}
+                title="Stop Agent Runtime Scheduler"
+                className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/20 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span className="hidden sm:inline">Stop</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isTogglingAgentRuntime}
+                onClick={handleStartAgentRuntime}
+                title="Start Agent Runtime Scheduler"
+                className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/20 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                <Play className="w-3 h-3 fill-current" />
+                <span className="hidden sm:inline">Start</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -435,6 +533,103 @@ export default function RuntimePage() {
       {/* TAB 1: AGENT RUNTIME STATUS */}
       {activeTab === 'agent' && (
         <div className="space-y-6">
+          {/* Agent Runtime Engine Scheduler Control Banner */}
+          <div className="p-6 rounded-2xl bg-white/80 dark:bg-zinc-900/80 border border-zinc-200/90 dark:border-zinc-800 space-y-4 shadow-sm backdrop-blur-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${
+                    agentRuntime?.running
+                      ? 'bg-gradient-to-tr from-cyan-600 to-blue-600 shadow-md shadow-cyan-500/20'
+                      : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+                  }`}
+                >
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Agent Runtime Scheduler Daemon
+                    </h3>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono border ${
+                        agentRuntime?.running
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-300'
+                          : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          agentRuntime?.running ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-400 dark:bg-zinc-500'
+                        }`}
+                      />
+                      {agentRuntime?.running ? 'SCHEDULER ACTIVE' : 'SCHEDULER STOPPED'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Background loop checking triggers, schedules, and agent execution threads every {agentRuntime?.loop_interval_seconds || 60} seconds.
+                  </p>
+                </div>
+              </div>
+
+              {/* Start / Stop Control Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                {agentRuntime?.running ? (
+                  <button
+                    type="button"
+                    disabled={isTogglingAgentRuntime}
+                    onClick={handleStopAgentRuntime}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/20 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>{isTogglingAgentRuntime ? 'Stopping...' : 'Stop Agent Runtime'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={isTogglingAgentRuntime}
+                    onClick={handleStartAgentRuntime}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>{isTogglingAgentRuntime ? 'Starting...' : 'Start Agent Runtime'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={refreshOverview}
+                  className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs transition-colors cursor-pointer"
+                  title="Refresh status"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick telemetry grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800/80 font-mono text-xs">
+              <div className="bg-zinc-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800/60">
+                <span className="text-[10px] text-zinc-500 block uppercase">Engine State</span>
+                <span className={`font-semibold ${agentRuntime?.running ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-600 dark:text-zinc-400'}`}>
+                  {agentRuntime?.running ? 'Active (Polling)' : 'Offline (Paused)'}
+                </span>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800/60">
+                <span className="text-[10px] text-zinc-500 block uppercase">Loop Interval</span>
+                <span className="text-zinc-800 dark:text-zinc-200">{agentRuntime?.loop_interval_seconds || 60}s cycle</span>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800/60">
+                <span className="text-[10px] text-zinc-500 block uppercase">Active Workers</span>
+                <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{activeAgents.length} Running</span>
+              </div>
+              <div className="bg-zinc-50 dark:bg-zinc-950/50 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800/60">
+                <span className="text-[10px] text-zinc-500 block uppercase">Scheduler Thread</span>
+                <span className="text-zinc-800 dark:text-zinc-200">{agentRuntime?.scheduler_alive ? 'Alive' : 'Dead'}</span>
+              </div>
+            </div>
+          </div>
+
           <div className="p-6 rounded-2xl bg-white/80 dark:bg-zinc-900/70 border border-zinc-200/90 dark:border-zinc-800 space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>

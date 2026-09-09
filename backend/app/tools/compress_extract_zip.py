@@ -8,24 +8,35 @@ from typing import Any
 import zipfile
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def compress_extract_zip(
     action: str,
     zip_path: str,
     source_paths: list[str] | None = None,
     destination_path: str | None = None,
 ) -> dict[str, Any]:
-    """Compresses files/folders into a ZIP or extracts files from a ZIP archive.
+    """Compresses files/folders into a ZIP or extracts files from a ZIP archive inside uploads.
 
     Args:
         action: 'compress', 'extract', or 'list'.
-        zip_path: Path to the target or source .zip file.
-        source_paths: List of file/folder paths to include when compressing.
-        destination_path: Target directory to extract files into.
+        zip_path: Path to the target or source .zip file inside uploads.
+        source_paths: List of file/folder paths inside uploads to include when compressing.
+        destination_path: Target directory inside uploads to extract files into.
 
     Returns:
         dict: Summary of archive operation.
     """
-    archive = Path(zip_path).resolve()
+    try:
+        archive = resolve_safe_path(zip_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "archive_path": str(zip_path),
+        }
+
     act = action.strip().lower()
 
     try:
@@ -42,7 +53,14 @@ def compress_extract_zip(
 
             with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
                 for src in source_paths:
-                    p = Path(src).resolve()
+                    try:
+                        p = resolve_safe_path(src)
+                    except (PermissionError, ValueError) as err:
+                        return {
+                            "success": False,
+                            "error": f"Security violation in source_path: {err}",
+                            "archive_path": str(archive),
+                        }
                     if not p.exists():
                         continue
                     if p.is_file():
@@ -72,15 +90,26 @@ def compress_extract_zip(
                     "archive_path": str(archive),
                 }
 
-            dest = Path(destination_path or archive.parent / archive.stem).resolve()
+            try:
+                dest = resolve_safe_path(destination_path or (archive.parent / archive.stem), default_to_root=True)
+            except (PermissionError, ValueError) as err:
+                return {
+                    "success": False,
+                    "error": str(err),
+                    "archive_path": str(archive),
+                }
+
             dest.mkdir(parents=True, exist_ok=True)
             extracted_files: list[str] = []
+
+            norm_dest = Path(os.path.normcase(str(dest)))
 
             with zipfile.ZipFile(archive, "r") as zf:
                 for member in zf.infolist():
                     # Zip slip vulnerability prevention
                     target = (dest / member.filename).resolve()
-                    if not str(target).startswith(str(dest)):
+                    norm_target = Path(os.path.normcase(str(target)))
+                    if not (norm_target == norm_dest or norm_target.is_relative_to(norm_dest)):
                         return {
                             "success": False,
                             "error": f"Security violation: path traversal detected in {member.filename}",

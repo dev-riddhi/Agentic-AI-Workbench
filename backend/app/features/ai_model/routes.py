@@ -10,7 +10,7 @@ from app.features.ai_model.schemas import (
     LlamaServerStatusResponse,
     ModelRuntimeStartRequest,
 )
-from app.features.user.controller import get_current_user
+from app.features.user.controller import get_current_user, get_optional_current_user
 from app.runtime.model_runtime import model_runtime
 from database.database import get_db
 from database.models.user import User
@@ -19,12 +19,13 @@ router = APIRouter(prefix="/models")
 
 
 @router.post("/upload", response_model=AIModelResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/upload/", response_model=AIModelResponse, status_code=status.HTTP_201_CREATED)
 def upload_model(
     file: UploadFile = File(...),
     name: str | None = Form(None),
     quantization: str | None = Form(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     return controller.upload_ai_model_controller(
         db=db,
@@ -35,12 +36,13 @@ def upload_model(
 
 
 @router.post("/download", response_model=AIModelResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/download/", response_model=AIModelResponse, status_code=status.HTTP_202_ACCEPTED)
 def download_model(
     download_req: AIModelDownloadRequest,
     background_tasks: BackgroundTasks,
     background: bool = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     return controller.download_ai_model_controller(
         db=db,
@@ -50,12 +52,13 @@ def download_model(
     )
 
 
+@router.get("", response_model=list[AIModelResponse], status_code=status.HTTP_200_OK)
 @router.get("/", response_model=list[AIModelResponse], status_code=status.HTTP_200_OK)
 def get_models(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     return controller.get_ai_models_controller(db=db, skip=skip, limit=limit)
 
@@ -73,7 +76,7 @@ def check_llama_status(
 @router.post("/runtime/start", status_code=status.HTTP_200_OK)
 def start_runtime(
     req: ModelRuntimeStartRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     try:
         return model_runtime.start(
@@ -94,19 +97,19 @@ def start_runtime(
 
 
 @router.post("/runtime/stop", status_code=status.HTTP_200_OK)
-def stop_runtime(current_user: User = Depends(get_current_user)):
+def stop_runtime(current_user: User | None = Depends(get_optional_current_user)):
     return model_runtime.stop()
 
 
 @router.get("/runtime/status", status_code=status.HTTP_200_OK)
-def get_runtime_status(current_user: User = Depends(get_current_user)):
+def get_runtime_status(current_user: User | None = Depends(get_optional_current_user)):
     return model_runtime.get_status()
 
 
 @router.get("/runtime/logs", status_code=status.HTTP_200_OK)
 def get_runtime_logs(
     lines: int = 100,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     return {"logs": model_runtime.get_logs(lines=lines)}
 
@@ -124,7 +127,7 @@ def get_download_progress(
 def get_model(
     id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     return controller.get_ai_model_by_id_controller(db=db, model_id=id)
 
@@ -133,6 +136,6 @@ def get_model(
 def delete_model(
     id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
 ):
     controller.delete_ai_model_controller(db=db, model_id=id)

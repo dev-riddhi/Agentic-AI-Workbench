@@ -9,6 +9,8 @@ from database.models.agent_tools import AgentTool, agent_tools
 from database.models.agent_documents import agent_documents
 from database.models.setting import Setting
 from database.models.runtime import Runtime
+from database.models.notification import Notification
+from database.models.agent_action import AgentAction
 
 __all__ = [
     "Base",
@@ -24,4 +26,6 @@ __all__ = [
     "agent_documents",
     "Setting",
     "Runtime",
+    "Notification",
+    "AgentAction",
 ]

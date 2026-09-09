@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { AuthProvider } from "@/context/auth-context";
 import { ToastProvider } from "@/context/toast-context";
+import { NotificationProvider } from "@/context/notification-context";
 import { NavigationShell } from "@/components/layout/navigation-shell";
 
 const geistSans = Geist({
@@ -37,7 +38,9 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             <ToastProvider>
-              <NavigationShell>{children}</NavigationShell>
+              <NotificationProvider>
+                <NavigationShell>{children}</NavigationShell>
+              </NotificationProvider>
             </ToastProvider>
           </AuthProvider>
         </Providers>

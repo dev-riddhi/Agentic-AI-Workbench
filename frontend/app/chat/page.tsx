@@ -149,7 +149,7 @@ function ChatContent() {
       .then((st) => {
         if (active) setRuntimeStatus(st);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // Load conversations
     chatApi.listConversations()
@@ -179,6 +179,8 @@ function ChatContent() {
       return;
     }
 
+    if (isSending) return;
+
     const selectedModel = models.find((m) => m.id === selectedModelId);
     const modelName = selectedModel ? selectedModel.name : 'AI Model';
 
@@ -186,7 +188,6 @@ function ChatContent() {
       const newConv = await chatApi.createConversation({
         model_id: selectedModelId,
         title: `Chat with ${modelName}`,
-        initial_message: presetPrompt || undefined,
         system_prompt: systemPrompt,
       });
 
@@ -196,7 +197,7 @@ function ChatContent() {
           model_id: newConv.model_id,
           model_name: modelName,
           title: newConv.title,
-          message_count: newConv.messages.length,
+          message_count: 0,
           last_message: presetPrompt || null,
           created_at: newConv.created_at,
           updated_at: newConv.updated_at,
@@ -363,10 +364,13 @@ function ChatContent() {
   const handleSendMessage = () => {
     if (!inputMessage.trim() || isSending) return;
 
+    const messageText = inputMessage.trim();
+    setInputMessage('');
+
     if (!activeConvId) {
-      handleStartNewChat(inputMessage.trim());
+      handleStartNewChat(messageText);
     } else {
-      triggerSend(activeConvId, inputMessage.trim());
+      triggerSend(activeConvId, messageText);
     }
   };
 
@@ -702,6 +706,7 @@ function ChatContent() {
                     key={idx}
                     type="button"
                     onClick={() => {
+                      if (isSending) return;
                       if (activeConvId) {
                         triggerSend(activeConvId, item.prompt);
                       } else {
@@ -729,9 +734,8 @@ function ChatContent() {
                 return (
                   <div
                     key={idx}
-                    className={`flex items-start gap-3 ${
-                      isUser ? 'flex-row-reverse' : 'flex-row'
-                    }`}
+                    className={`flex items-start gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'
+                      }`}
                   >
                     {/* User / Bot Avatar */}
                     <div
@@ -739,7 +743,7 @@ function ChatContent() {
                         isUser
                           ? 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200'
                           : 'bg-gradient-to-tr from-cyan-600 to-blue-600 border-cyan-400/40 text-white'
-                      }`}
+                        }`}
                     >
                       {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
                     </div>

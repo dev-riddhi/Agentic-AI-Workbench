@@ -7,6 +7,7 @@ from app.features.documents.routes import router as document_router
 from app.features.runtime.routes import router as runtime_router
 from app.features.settings.routes import router as settings_router
 from app.features.user.routes import router as user_router
+from app.features.notifications.routes import router as notifications_router
 
 router = APIRouter(prefix="/api/v1")
 
@@ -17,4 +18,5 @@ router.include_router(document_router, tags=["document"])
 router.include_router(ai_model_router, tags=["ai_model"])
 router.include_router(runtime_router, tags=["runtime"])
 router.include_router(settings_router, tags=["settings"])
+router.include_router(notifications_router, tags=["notifications"])
 

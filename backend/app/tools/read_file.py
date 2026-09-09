@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def read_file(
     file_path: str,
     encoding: str = "utf-8",
@@ -13,10 +16,10 @@ def read_file(
     end_line: int | None = None,
     max_bytes: int | None = None,
 ) -> dict[str, Any]:
-    """Reads content from a file.
+    """Reads content from a file inside the uploads directory.
 
     Args:
-        file_path: Absolute or relative path to the file.
+        file_path: Path to the file inside the uploads directory.
         encoding: File character encoding (default: utf-8).
         start_line: Optional 1-based start line index (inclusive).
         end_line: Optional 1-based end line index (inclusive).
@@ -25,7 +28,15 @@ def read_file(
     Returns:
         dict: Result containing 'content', 'total_lines', 'size_bytes', and 'truncated'.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
+
     if not path.exists():
         return {
             "success": False,

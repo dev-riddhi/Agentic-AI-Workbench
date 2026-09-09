@@ -131,6 +131,13 @@ class Agent(Base):
         back_populates="agents",
     )
     ai_model = relationship("AIModel")
+    actions = relationship(
+        "AgentAction",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        order_by="AgentAction.created_at.desc()",
+        lazy="selectin",
+    )
 
     @property
     def tools(self) -> list[str]:

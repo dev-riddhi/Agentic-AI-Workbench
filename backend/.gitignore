@@ -2,11 +2,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
-uploads/
-/models/
-/database/*.db
+uploads/*
+!uploads/.gitkeep
+models/*
+!models/.gitkeep
+database/*.db
+database/*.sqlite
 llama.cpp/
 /alembic/versions/*
-.env
-__pycache__/**/*.pyc
-*.pyc

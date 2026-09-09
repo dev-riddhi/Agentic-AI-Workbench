@@ -7,6 +7,9 @@ import re
 from typing import Any
 
 
+from app.tools.file_security import resolve_safe_path
+
+
 def edit_file(
     file_path: str,
     target_content: str,
@@ -15,10 +18,10 @@ def edit_file(
     is_regex: bool = False,
     encoding: str = "utf-8",
 ) -> dict[str, Any]:
-    """Edits a file by replacing instances of target_content with replacement_content.
+    """Edits a file inside the uploads directory by replacing target_content with replacement_content.
 
     Args:
-        file_path: Absolute or relative path to the file.
+        file_path: Path to the file inside the uploads directory.
         target_content: String or regex pattern to search for.
         replacement_content: String to replace the target with.
         replace_all: If True, replace all occurrences; otherwise, only the first occurrence.
@@ -28,7 +31,15 @@ def edit_file(
     Returns:
         dict: Result containing 'success', 'file_path', and 'replacements_count'.
     """
-    path = Path(file_path).resolve()
+    try:
+        path = resolve_safe_path(file_path)
+    except (PermissionError, ValueError) as err:
+        return {
+            "success": False,
+            "error": str(err),
+            "file_path": str(file_path),
+        }
+
     if not path.exists():
         return {
             "success": False,

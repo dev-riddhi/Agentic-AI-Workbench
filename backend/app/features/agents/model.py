@@ -19,7 +19,7 @@ def get_agents(
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .offset(skip)
         .limit(limit)
@@ -37,7 +37,7 @@ def get_agent(db: Session, agent_id: UUID) -> Agent | None:
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .where(Agent.id == agent_id)
     )
@@ -196,7 +196,7 @@ def get_running_agents(
             selectinload(Agent.agent_tools),
             selectinload(Agent.documents),
             selectinload(Agent.ai_model),
-            selectinload(Agent.runtime_instances),
+            # selectinload(Agent.runtime_instances),
         )
         .distinct()
     )
@@ -255,6 +255,34 @@ def get_active_runtimes(
         .options(selectinload(Runtime.agent))
         .where(Runtime.status == "running")
         .order_by(Runtime.started_at.desc())
+    )
+    return list(db.scalars(statement).all())
+
+
+def get_agent_actions(
+    db: Session,
+    agent_id: UUID,
+    limit: int = 50,
+) -> list:
+    from database.models.agent_action import AgentAction
+    statement = (
+        select(AgentAction)
+        .where(AgentAction.agent_id == agent_id)
+        .order_by(AgentAction.created_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(statement).all())
+
+
+def get_latest_agent_actions(
+    db: Session,
+    limit: int = 50,
+) -> list:
+    from database.models.agent_action import AgentAction
+    statement = (
+        select(AgentAction)
+        .order_by(AgentAction.created_at.desc())
+        .limit(limit)
     )
     return list(db.scalars(statement).all())
 

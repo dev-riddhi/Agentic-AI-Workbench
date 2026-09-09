@@ -11,10 +11,13 @@ from app.features.agents import model as agent_model
 from app.features.ai_model import controller as ai_model_controller
 from app.features.runtime.schemas import (
     ActiveAgentRuntimeItem,
+    AgentRuntimeStatusResponse,
     AgentStartRequest,
+    ModelRuntimeStatusResponse,
     ModelStartRequest,
     ModelTestRequest,
     RuntimeOverviewResponse,
+    RuntimeStatusResponse,
 )
 from app.runtime.model_runtime import model_runtime
 
@@ -51,7 +54,37 @@ def get_model_logs(lines: int = 100):
 
 
 def test_model(req: ModelTestRequest):
+    from app.features.settings.model import get_is_testing
+    is_testing = get_is_testing()
+
     runtime_status = model_runtime.get_status()
+
+    # If is_testing is True (or if testing enabled and llama-server not running), use Gemini
+    if is_testing:
+        start_t = time.time()
+        try:
+            from app.llm.gemini import chat as gemini_chat
+            gemini_resp = gemini_chat(
+                contents=req.prompt,
+                model="gemini-2.5-flash",
+                system_instruction="You are a helpful and concise local AI assistant.",
+            )
+            elapsed_ms = round((time.time() - start_t) * 1000, 2)
+            content = str(gemini_resp)
+            return {
+                "success": True,
+                "response": content,
+                "latency_ms": elapsed_ms,
+                "model": "gemini-2.5-flash (Testing Mode)",
+                "usage": {"prompt_tokens": len(req.prompt.split()), "completion_tokens": len(content.split())},
+            }
+        except Exception as exc:
+            elapsed_ms = round((time.time() - start_t) * 1000, 2)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Inference error from Gemini ({elapsed_ms}ms): {str(exc)}",
+            )
+
     if not runtime_status.get("running"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -131,6 +164,41 @@ def get_active_agents(db: Session) -> list[ActiveAgentRuntimeItem]:
     return items
 
 
+def get_agent_runtime_status(db: Session) -> AgentRuntimeStatusResponse:
+    from app.runtime.agent_runtime import agent_runtime
+
+    st = agent_runtime.get_status(db=db)
+    active_agents = get_active_agents(db)
+    return AgentRuntimeStatusResponse(
+        running=st["running"],
+        scheduler_alive=st["scheduler_alive"],
+        loop_interval_seconds=st["loop_interval_seconds"],
+        active_agents_count=len(active_agents),
+        active_agents=active_agents,
+    )
+
+
+def start_agent_scheduler(db: Session) -> AgentRuntimeStatusResponse:
+    from app.runtime.agent_runtime import agent_runtime
+
+    agent_runtime.start()
+    return get_agent_runtime_status(db)
+
+
+def stop_agent_scheduler(db: Session) -> AgentRuntimeStatusResponse:
+    from app.runtime.agent_runtime import agent_runtime
+
+    agent_runtime.stop()
+    return get_agent_runtime_status(db)
+
+
+def get_runtime_status(db: Session) -> RuntimeStatusResponse:
+    return RuntimeStatusResponse(
+        model_runtime=ModelRuntimeStatusResponse(**get_model_status()),
+        agent_runtime=get_agent_runtime_status(db),
+    )
+
+
 def start_agent(db: Session, agent_id: UUID, req: AgentStartRequest | None = None):
     agent = agent_model.get_agent(db=db, agent_id=agent_id)
     if not agent:
@@ -171,12 +239,14 @@ def get_runtime_overview(db: Session) -> RuntimeOverviewResponse:
     server_path = llama_check.get("server_path")
 
     model_st = model_runtime.get_status()
-    active_agents = get_active_agents(db)
+    agent_st = get_agent_runtime_status(db)
 
     return RuntimeOverviewResponse(
         llama_installed=installed,
         llama_server_path=server_path,
-        model_runtime=model_st,
-        active_agents_count=len(active_agents),
-        active_agents=active_agents,
+        model_runtime=ModelRuntimeStatusResponse(**model_st),
+        agent_runtime=agent_st,
+        active_agents_count=agent_st.active_agents_count,
+        active_agents=agent_st.active_agents,
     )
+

@@ -53,9 +53,24 @@ class ActiveAgentRuntimeItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AgentRuntimeStatusResponse(BaseModel):
+    running: bool
+    scheduler_alive: bool
+    loop_interval_seconds: int = 60
+    active_agents_count: int
+    active_agents: list[ActiveAgentRuntimeItem] = []
+
+
+class RuntimeStatusResponse(BaseModel):
+    model_runtime: ModelRuntimeStatusResponse
+    agent_runtime: AgentRuntimeStatusResponse
+
+
 class RuntimeOverviewResponse(BaseModel):
     llama_installed: bool
     llama_server_path: str | None = None
     model_runtime: ModelRuntimeStatusResponse
+    agent_runtime: AgentRuntimeStatusResponse | None = None
     active_agents_count: int
     active_agents: list[ActiveAgentRuntimeItem]
+

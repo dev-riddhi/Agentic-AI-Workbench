@@ -406,16 +406,18 @@ def upload_ai_model_controller(
     # Use GGUFReader to automatically read model info from the uploaded binary
     friendly_name, quant = extract_gguf_metadata(file_path, safe_filename)
 
+    # Override with caller-provided name or quantization if explicitly passed
     if name and name.strip():
         friendly_name = name.strip()
     if quantization and quantization.strip():
-        quant = quantization.strip()
+        quant = quantization.strip().upper()
 
-    # Check if model is already registered
-    existing_model = model.get_ai_model_by_repo_and_file(
+    # Check if model is already registered by filename, file_path, or repo_id
+    existing_model = model.get_ai_model_by_filename_or_path(
         db=db,
-        repo_id=repo_id,
         filename=safe_filename,
+        file_path=file_path,
+        repo_id=repo_id,
     )
     if existing_model:
         existing_model.name = friendly_name

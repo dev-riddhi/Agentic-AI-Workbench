@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [environment, setEnvironment] = useState('development');
   const [defaultTimeout, setDefaultTimeout] = useState<number>(60);
   const [maintenanceMode, setMaintenanceMode] = useState<boolean>(false);
+  const [isTesting, setIsTesting] = useState<boolean>(false);
   const [extraKVs, setExtraKVs] = useState<Array<{ key: string; value: string }>>([]);
   const [newExtraKey, setNewExtraKey] = useState('');
   const [newExtraValue, setNewExtraValue] = useState('');
@@ -81,6 +82,7 @@ export default function SettingsPage() {
         if (d.environment) setEnvironment(d.environment);
         if (d.default_timeout_seconds) setDefaultTimeout(d.default_timeout_seconds);
         if (typeof d.maintenance_mode === 'boolean') setMaintenanceMode(d.maintenance_mode);
+        if (typeof d.is_testing === 'boolean') setIsTesting(d.is_testing);
         if (d.extra_values && typeof d.extra_values === 'object') {
           const kvs = Object.entries(d.extra_values).map(([k, v]) => ({
             key: k,
@@ -185,6 +187,7 @@ export default function SettingsPage() {
         environment,
         default_timeout_seconds: defaultTimeout,
         maintenance_mode: maintenanceMode,
+        is_testing: isTesting,
         extra_values,
       });
 
@@ -420,6 +423,49 @@ export default function SettingsPage() {
                 }`}
               >
                 {maintenanceMode && <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-zinc-950" />}
+              </div>
+            </div>
+          </div>
+
+          {/* Testing Mode Toggle (is_testing) */}
+          <div className="space-y-1.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-mono text-zinc-300 uppercase">
+                Inference Testing Mode (<span className="text-cyan-400">is_testing</span>)
+              </label>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                isTesting 
+                  ? 'bg-purple-500/10 border-purple-500/30 text-purple-300' 
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+              }`}>
+                {isTesting ? 'Google Gemini (Testing Mode)' : 'llama.cpp (Offline Native Models)'}
+              </span>
+            </div>
+            <div
+              onClick={() => setIsTesting(!isTesting)}
+              className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                isTesting
+                  ? 'bg-purple-500/10 border-purple-500/30 text-purple-200'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+              }`}
+            >
+              <div className="space-y-0.5">
+                <div className="text-xs font-medium flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${isTesting ? 'bg-purple-400 animate-pulse' : 'bg-zinc-500'}`} />
+                  <span>{isTesting ? 'Testing Mode Enabled: Gemini Active' : 'Testing Mode Disabled: llama.cpp Active'}</span>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  {isTesting
+                    ? 'When is_testing is True, all agent actions, chat streaming, and completions are routed to Google Gemini across the backend.'
+                    : 'When is_testing is False, queries local llama.cpp server models (llama.cpp.py) and executes offline.'}
+                </p>
+              </div>
+              <div
+                className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ml-3 ${
+                  isTesting ? 'border-purple-400 bg-purple-500 text-white' : 'border-zinc-700 bg-zinc-900'
+                }`}
+              >
+                {isTesting && <div className="w-2 h-2 rounded-full bg-white" />}
               </div>
             </div>
           </div>

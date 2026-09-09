@@ -90,10 +90,24 @@ export interface ActiveAgentRuntimeItem {
   last_heartbeat: string;
 }
 
+export interface AgentRuntimeStatus {
+  running: boolean;
+  scheduler_alive: boolean;
+  loop_interval_seconds: number;
+  active_agents_count: number;
+  active_agents: ActiveAgentRuntimeItem[];
+}
+
+export interface RuntimeStatusResponse {
+  model_runtime: ModelRuntimeStatus;
+  agent_runtime: AgentRuntimeStatus;
+}
+
 export interface RuntimeOverviewResponse {
   llama_installed: boolean;
   llama_server_path?: string | null;
   model_runtime: ModelRuntimeStatus;
+  agent_runtime?: AgentRuntimeStatus | null;
   active_agents_count: number;
   active_agents: ActiveAgentRuntimeItem[];
 }
@@ -192,6 +206,45 @@ export interface AgentStopResponse {
   stopped_at: string;
 }
 
+export interface AgentStreamEvent {
+  type:
+    | 'agent_started'
+    | 'reasoning_step'
+    | 'model_output'
+    | 'tool_call'
+    | 'tool_result'
+    | 'agent_done_signal'
+    | 'completed'
+    | 'error'
+    | 'ping';
+  step?: number;
+  agent_id?: string;
+  agent_name?: string;
+  provider?: string;
+  tools?: string[];
+  prompt?: string;
+  content?: string;
+  tool?: string;
+  arguments?: Record<string, unknown>;
+  call_index?: number;
+  result?: unknown;
+  status?: string;
+  message?: string;
+  response?: string;
+  tool_calls?: Array<{
+    name?: string;
+    arguments?: Record<string, unknown>;
+    result?: unknown;
+    status?: string;
+  }>;
+  tool_call_count?: number;
+  step_count?: number;
+  elapsed_seconds?: number;
+  error?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
 export interface SettingsData {
   company_name: string;
   max_concurrent_agent_limit: number;
@@ -199,6 +252,7 @@ export interface SettingsData {
   environment: string;
   default_timeout_seconds: number;
   maintenance_mode: boolean;
+  is_testing: boolean;
   extra_values?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -218,6 +272,26 @@ export interface SettingsUpdatePayload {
   environment?: string;
   default_timeout_seconds?: number;
   maintenance_mode?: boolean;
+  is_testing?: boolean;
   extra_values?: Record<string, unknown>;
   [key: string]: unknown;
+}
+
+export interface AgentActionRecord {
+  id: string;
+  agent_id?: string | null;
+  agent_name?: string | null;
+  execution_id?: string | null;
+  prompt?: string | null;
+  final_output: string;
+  status: string;
+  tool_calls_count: number;
+  tool_calls?: Array<{
+    name?: string;
+    arguments?: Record<string, unknown>;
+    result?: unknown;
+    status?: string;
+  }> | null;
+  execution_time_seconds?: number | null;
+  created_at: string;
 }
