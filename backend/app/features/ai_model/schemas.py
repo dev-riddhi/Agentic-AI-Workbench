@@ -55,8 +55,8 @@ class ModelRuntimeStartRequest(BaseModel):
     n_cpu_moe: int | None = None
     mmap: bool | None = None
     mlock: bool = False
-    cache_type_k: str | None = "turbo4"
-    cache_type_v: str | None = "turbo3"
+    cache_type_k: str | None = None
+    cache_type_v: str | None = None
     wait_ready: bool = True
     timeout: float = 30.0
 

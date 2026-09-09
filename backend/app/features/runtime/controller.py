@@ -68,11 +68,12 @@ def test_model(req: ModelTestRequest):
     if is_testing:
         start_t = time.time()
         try:
-            from app.llm.gemini import chat as gemini_chat
-            gemini_resp = gemini_chat(
-                contents=req.prompt,
-                model="gemini-2.5-flash",
-                system_instruction="You are a helpful and concise local AI assistant.",
+            from app.llm import gemini
+            active_model = getattr(gemini, "HARDCODED_MODEL", "gemini-2.5-flash-lite")
+            gemini_resp = gemini.chat(
+                prompt=req.prompt,
+                model=active_model,
+                system_prompt="You are a helpful and concise local AI assistant.",
             )
             elapsed_ms = round((time.time() - start_t) * 1000, 2)
             content = str(gemini_resp)
@@ -80,7 +81,7 @@ def test_model(req: ModelTestRequest):
                 "success": True,
                 "response": content,
                 "latency_ms": elapsed_ms,
-                "model": "gemini-2.5-flash (Testing Mode)",
+                "model": f"{active_model} (Testing Mode)",
                 "usage": {"prompt_tokens": len(req.prompt.split()), "completion_tokens": len(content.split())},
             }
         except Exception as exc:

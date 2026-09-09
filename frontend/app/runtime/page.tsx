@@ -34,6 +34,19 @@ import { useToast } from '@/context/toast-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+const KV_CACHE_OPTIONS = [
+  { value: '', label: 'Default / None ("")' },
+  { value: 'f16', label: 'f16 (16-bit Float - Engine Default)' },
+  { value: 'q8_0', label: 'q8_0 (8-bit - High quality, ~50% VRAM savings)' },
+  { value: 'q4_0', label: 'q4_0 (4-bit - Maximum VRAM savings)' },
+  { value: 'q4_1', label: 'q4_1 (4-bit variant 1)' },
+  { value: 'q5_0', label: 'q5_0 (5-bit quantization type 0)' },
+  { value: 'q5_1', label: 'q5_1 (5-bit quantization type 1)' },
+  { value: 'iq4_nl', label: 'iq4_nl (4-bit non-linear quantization)' },
+  { value: 'bf16', label: 'bf16 (16-bit bfloat)' },
+  { value: 'f32', label: 'f32 (32-bit Float - Full precision)' },
+];
+
 export default function RuntimePage() {
   const { toast, confirm } = useToast();
   const [activeTab, setActiveTab] = useState<'agent' | 'model'>('agent');
@@ -55,10 +68,10 @@ export default function RuntimePage() {
   const [runtimeCtxSize, setRuntimeCtxSize] = useState<number>(4096);
   const [runtimeGpuLayers, setRuntimeGpuLayers] = useState<number>(99);
   const [runtimeNCpuMoe, setRuntimeNCpuMoe] = useState<number | ''>('');
-  const [runtimeMmap, setRuntimeMmap] = useState<boolean>(true);
+  const [runtimeMmap, setRuntimeMmap] = useState<boolean>(false);
   const [runtimeMlock, setRuntimeMlock] = useState<boolean>(false);
-  const [runtimeCacheK, setRuntimeCacheK] = useState<string>('turbo4');
-  const [runtimeCacheV, setRuntimeCacheV] = useState<string>('turbo3');
+  const [runtimeCacheK, setRuntimeCacheK] = useState<string>('');
+  const [runtimeCacheV, setRuntimeCacheV] = useState<string>('');
   const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(true);
   const [isStartingRuntime, setIsStartingRuntime] = useState(false);
   const [isStoppingRuntime, setIsStoppingRuntime] = useState(false);
@@ -1000,28 +1013,36 @@ export default function RuntimePage() {
                           <label className="block text-zinc-600 dark:text-zinc-400 font-mono mb-1 text-[11px] font-semibold">
                             --cache-type-k
                           </label>
-                          <input
-                            type="text"
-                            placeholder="turbo4"
+                          <select
                             value={runtimeCacheK}
                             onChange={(e) => setRuntimeCacheK(e.target.value)}
-                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                          />
-                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: turbo4</p>
+                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+                          >
+                            {KV_CACHE_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: None (&quot;&quot;)</p>
                         </div>
 
                         <div>
                           <label className="block text-zinc-600 dark:text-zinc-400 font-mono mb-1 text-[11px] font-semibold">
                             --cache-type-v
                           </label>
-                          <input
-                            type="text"
-                            placeholder="turbo3"
+                          <select
                             value={runtimeCacheV}
                             onChange={(e) => setRuntimeCacheV(e.target.value)}
-                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
-                          />
-                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: turbo3</p>
+                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500 cursor-pointer"
+                          >
+                            {KV_CACHE_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: None (&quot;&quot;)</p>
                         </div>
                       </div>
 

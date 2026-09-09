@@ -1,4 +1,4 @@
-"""Google Gemini LLM integration module with a single hardcoded model.
+"""Google Gemini LLM integration module with free-tier model support.
 
 Provides the exact same function and client interfaces as llama.cpp.py:
 1. get_client
@@ -9,27 +9,38 @@ Provides the exact same function and client interfaces as llama.cpp.py:
 6. stream_chat
 7. GeminiClient (and LlamaCppClient alias)
 
-All operations strictly route to the single hardcoded model: `gemini-2.5-flash`.
+All operations route to the latest free-tier model: `gemini-2.5-flash-lite` (with fallback to `gemini-3-flash-preview`).
 """
 
 from collections.abc import Iterator
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import errors, types
 
-# Load environment variables from .env if present
+# Load environment variables from .env if present (supporting both workspace root and backend folder)
 load_dotenv()
+_backend_env = Path(__file__).resolve().parents[2] / ".env"
+if _backend_env.is_file():
+    load_dotenv(dotenv_path=_backend_env)
 
 logger = logging.getLogger(__name__)
 
-# Single hardcoded Gemini model used for all inference, loading, and catalog requests
-HARDCODED_MODEL: str = "gemini-2.5-flash"
+# Primary Gemini model for free-tier inference and testing
+HARDCODED_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_MODEL: str = HARDCODED_MODEL
 DEFAULT_FREE_TIER_MODEL: str = HARDCODED_MODEL
+
+# Available free-tier models in Google AI Studio for automatic fallback
+FREE_TIER_FALLBACKS: list[str] = [
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash-preview",
+    "gemini-2.5-flash",
+]
 
 DEFAULT_BASE_URL: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
 DEFAULT_API_KEY: str = (
@@ -38,16 +49,16 @@ DEFAULT_API_KEY: str = (
     or "gemini-api-key"
 )
 
-# Documentation and specifications for the hardcoded model
+# Documentation and specifications for the model
 HARDCODED_MODEL_SPECS: dict[str, Any] = {
     "id": HARDCODED_MODEL,
     "name": f"models/{HARDCODED_MODEL}",
     "created": None,
     "owned_by": "google",
-    "displayName": "Gemini 2.5 Flash",
-    "description": "Google Gemini 2.5 Flash - Single hardcoded model for testing and inference.",
+    "displayName": "Gemini 2.5 Flash-Lite",
+    "description": "Google Gemini 2.5 Flash-Lite - Latest high-speed, cost-efficient free-tier model for inference and testing.",
     "inputTokenLimit": 1048576,
-    "outputTokenLimit": 8192,
+    "outputTokenLimit": 65536,
     "supportedGenerationMethods": ["generateContent", "countTokens"],
     "rate_limits": {
         "rpm": 15,
@@ -183,10 +194,10 @@ def request_model(
     system_prompt: str | None = None,
     **kwargs: Any,
 ) -> GeminiResponseWrapper | Iterator[GeminiResponseWrapper]:
-    """Sends a generation request to the single hardcoded Gemini model (`gemini-2.5-flash`).
+    """Sends a generation request to the Gemini model (`gemini-2.5-flash-lite` with fallback).
 
     Args:
-        model: Model identifier (strictly uses HARDCODED_MODEL regardless of argument).
+        model: Optional model identifier (defaults to HARDCODED_MODEL).
         messages: Either a prompt string or list of message dicts (role, content).
         base_url: Base URL (compatibility parameter).
         api_key: Optional API key.
@@ -199,9 +210,6 @@ def request_model(
     Returns:
         GeminiResponseWrapper (non-streaming) or Iterator of GeminiResponseWrapper (streaming).
     """
-    # Force single hardcoded model
-    target_model = HARDCODED_MODEL
-
     cli = client
     if cli is None:
         try:
@@ -220,33 +228,57 @@ def request_model(
         system_instruction=sys_inst if sys_inst else None,
     )
 
-    try:
-        if stream:
-            gen_stream = cli.models.generate_content_stream(
+    # Determine priority list of models (requested model, then HARDCODED_MODEL, then fallbacks)
+    initial_target = model or HARDCODED_MODEL
+    candidate_models: list[str] = [initial_target]
+    for alt in FREE_TIER_FALLBACKS:
+        if alt not in candidate_models:
+            candidate_models.append(alt)
+
+    last_error: Exception | None = None
+    for target_model in candidate_models:
+        try:
+            if stream:
+                gen_stream = cli.models.generate_content_stream(
+                    model=target_model,
+                    contents=contents,
+                    config=config,
+                )
+
+                def _stream_generator() -> Iterator[GeminiResponseWrapper]:
+                    for chunk in gen_stream:
+                        chunk_text = getattr(chunk, "text", "") or ""
+                        if chunk_text:
+                            yield GeminiResponseWrapper(text=chunk_text, raw_response=chunk)
+
+                return _stream_generator()
+
+            response = cli.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
             )
+            full_text = getattr(response, "text", "") or ""
+            return GeminiResponseWrapper(text=full_text, raw_response=response)
 
-            def _stream_generator() -> Iterator[GeminiResponseWrapper]:
-                for chunk in gen_stream:
-                    chunk_text = getattr(chunk, "text", "") or ""
-                    if chunk_text:
-                        yield GeminiResponseWrapper(text=chunk_text, raw_response=chunk)
+        except errors.APIError as exc:
+            last_error = exc
+            error_code = getattr(exc, "code", None)
+            error_str = str(exc)
+            # If rate-limited or model overloaded/unavailable, attempt fallback to other free tier models
+            if error_code in (429, 503) or "RESOURCE_EXHAUSTED" in error_str or "UNAVAILABLE" in error_str:
+                logger.warning(
+                    "Gemini model '%s' quota exhausted or unavailable (%s). Attempting fallback model...",
+                    target_model,
+                    exc,
+                )
+                continue
+            logger.error("Gemini API error for model '%s': %s", target_model, exc)
+            raise
 
-            return _stream_generator()
-
-        response = cli.models.generate_content(
-            model=target_model,
-            contents=contents,
-            config=config,
-        )
-        full_text = getattr(response, "text", "") or ""
-        return GeminiResponseWrapper(text=full_text, raw_response=response)
-
-    except errors.APIError as exc:
-        logger.error("Gemini API error for model '%s': %s", target_model, exc)
-        raise
+    if last_error:
+        raise last_error
+    raise RuntimeError("No Gemini models available for generation.")
 
 
 def chat(
@@ -260,21 +292,25 @@ def chat(
     client: genai.Client | None = None,
     **kwargs: Any,
 ) -> str:
-    """Convenience helper: sends a prompt to the hardcoded Gemini model and returns the text response."""
+    """Convenience helper: sends a prompt to the Gemini model and returns the text response."""
+    actual_prompt = prompt or kwargs.pop("contents", "")
+    actual_system_prompt = system_prompt or kwargs.pop("system_instruction", None)
+    target_model = model or HARDCODED_MODEL
+
     cli = GeminiClient(base_url=base_url, api_key=api_key) if client is None else None
     if cli is not None:
         return cli.chat(
-            model=HARDCODED_MODEL,
-            prompt=prompt,
-            system_prompt=system_prompt,
+            model=target_model,
+            prompt=actual_prompt,
+            system_prompt=actual_system_prompt,
             temperature=temperature,
             max_tokens=max_tokens,
             **kwargs,
         )
     resp = request_model(
-        model=HARDCODED_MODEL,
-        messages=prompt,
-        system_prompt=system_prompt,
+        model=target_model,
+        messages=actual_prompt,
+        system_prompt=actual_system_prompt,
         base_url=base_url,
         api_key=api_key,
         temperature=temperature,

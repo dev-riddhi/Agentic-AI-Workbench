@@ -234,11 +234,11 @@ class ModelRuntime:
             if mlock:
                 cmd.append("--mlock")
 
-            if cache_type_k and str(cache_type_k).strip():
-                cmd.extend(["--cache-type-k", str(cache_type_k).strip()])
+            if cache_type_k and str(cache_type_k).strip() != "":
+                cmd.extend(["--cache-type-k", cache_type_k.strip()])
 
-            if cache_type_v and str(cache_type_v).strip():
-                cmd.extend(["--cache-type-v", str(cache_type_v).strip()])
+            if cache_type_v and str(cache_type_v).strip() != "":
+                cmd.extend(["--cache-type-v", cache_type_v.strip()])
 
             if extra_args:
                 cmd.extend(extra_args)
