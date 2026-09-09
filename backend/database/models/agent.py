@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 from uuid import UUID, uuid4
 
@@ -106,14 +106,14 @@ class Agent(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.now(),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=datetime.now(),
-        onupdate=datetime.now(),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
@@ -136,6 +136,13 @@ class Agent(Base):
         back_populates="agent",
         cascade="all, delete-orphan",
         order_by="AgentAction.created_at.desc()",
+        lazy="selectin",
+    )
+    outputs = relationship(
+        "AgentOutput",
+        back_populates="agent",
+        cascade="all, delete-orphan",
+        order_by="AgentOutput.created_at.desc()",
         lazy="selectin",
     )
 

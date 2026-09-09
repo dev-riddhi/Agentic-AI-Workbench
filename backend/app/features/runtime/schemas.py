@@ -10,6 +10,11 @@ class ModelStartRequest(BaseModel):
     ctx_size: int = 4096
     n_gpu_layers: int = 99
     threads: int | None = None
+    n_cpu_moe: int | None = None
+    mmap: bool | None = None
+    mlock: bool = False
+    cache_type_k: str | None = "turbo4"
+    cache_type_v: str | None = "turbo3"
     wait_ready: bool = True
     timeout: float = 30.0
 
@@ -35,6 +40,11 @@ class ModelRuntimeStatusResponse(BaseModel):
     ctx_size: int
     n_gpu_layers: int
     threads: int | None = None
+    n_cpu_moe: int | None = None
+    mmap: bool | None = None
+    mlock: bool | None = None
+    cache_type_k: str | None = None
+    cache_type_v: str | None = None
     base_url: str
     health_url: str
     uptime_seconds: float | None = None

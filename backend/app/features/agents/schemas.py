@@ -1,7 +1,9 @@
+from collections.abc import Iterable
 from typing import Any
 from datetime import datetime
 from uuid import UUID
 
+from app.datetime_utils import UTCDateTime
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.features.ai_model.schemas import AIModelResponse
@@ -89,6 +91,27 @@ class AgentUpdate(BaseModel):
     tools: list[str] | None = None
     document_ids: list[UUID] | None = None
 
+    @field_validator("model_id", mode="before")
+    @classmethod
+    def validate_model_id(cls, v: Any) -> Any:
+        if v == "" or v is None:
+            return None
+        return v
+
+    @field_validator("schedule", mode="before")
+    @classmethod
+    def validate_schedule(cls, v: Any) -> Any:
+        if v == "":
+            return None
+        return v
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def validate_description(cls, v: Any) -> Any:
+        if v == "":
+            return None
+        return v
+
 
 class AgentResponse(BaseModel):
     id: UUID
@@ -106,8 +129,8 @@ class AgentResponse(BaseModel):
     concurrency: int = 1
     retries: int = 3
     is_running: bool = False
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
     tools: list[ToolResponse] = []
     documents: list[DocumentResponse] = []
 
@@ -115,7 +138,7 @@ class AgentResponse(BaseModel):
 
     @field_validator("tools", mode="before")
     @classmethod
-    def serialize_tools(cls, v: any) -> list[dict[str, any]]:
+    def serialize_tools(cls, v: Iterable[object]) -> list[dict[str, object]]:
         if not v:
             return []
         try:
@@ -165,7 +188,7 @@ class AgentResponse(BaseModel):
 
 
 class AgentRunRequest(BaseModel):
-    prompt: str
+    prompt: str | None = None
     conversation_id: UUID | None = None
     auto_restart: bool = True
 
@@ -176,7 +199,7 @@ class AgentRunResponse(BaseModel):
     status: str
     response: str
     tool_calls: list[dict] = []
-    completed_at: datetime
+    completed_at: UTCDateTime
 
 
 class AgentStopRequest(BaseModel):
@@ -188,7 +211,7 @@ class AgentStopResponse(BaseModel):
     agent_id: UUID
     status: str = "stopped"
     message: str = "Agent execution stopped successfully"
-    stopped_at: datetime
+    stopped_at: UTCDateTime
 
 
 class AgentActionResponse(BaseModel):
@@ -202,6 +225,6 @@ class AgentActionResponse(BaseModel):
     tool_calls_count: int = 0
     tool_calls: list[dict[str, Any]] | None = None
     execution_time_seconds: float | None = None
-    created_at: datetime
+    created_at: UTCDateTime
 
     model_config = ConfigDict(from_attributes=True)

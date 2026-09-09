@@ -150,6 +150,7 @@ def update_agent_controller(
         retries=agent_in.retries,
         tools=tools,
         documents=documents,
+        fields_set=agent_in.model_fields_set,
     )
 
 

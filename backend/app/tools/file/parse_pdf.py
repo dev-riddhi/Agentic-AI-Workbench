@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-from app.tools.file_security import resolve_safe_path
+from app.tools.file.file_security import resolve_safe_path
 
 
 def parse_pdf(

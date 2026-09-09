@@ -44,13 +44,13 @@ export const agentsApi = {
 
   runAgent: async (
     id: string,
-    prompt: string,
+    prompt?: string | null,
     conversation_id?: string | null,
     auto_restart = true
   ): Promise<AgentRunResponse> => {
     const response = await apiClient.post<AgentRunResponse>(`/agents/${id}/run`, {
-      prompt,
-      conversation_id,
+      prompt: prompt ? prompt.trim() : null,
+      conversation_id: conversation_id || null,
       auto_restart,
     });
     return response.data;
@@ -66,7 +66,7 @@ export const agentsApi = {
     signal,
   }: {
     id: string;
-    prompt: string;
+    prompt?: string | null;
     conversation_id?: string | null;
     onEvent: (event: import('./types').AgentStreamEvent) => void;
     onError?: (error: Error) => void;
@@ -83,7 +83,10 @@ export const agentsApi = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ prompt, conversation_id }),
+        body: JSON.stringify({
+          prompt: prompt ? prompt.trim() : null,
+          conversation_id: conversation_id || null,
+        }),
         signal,
       });
 

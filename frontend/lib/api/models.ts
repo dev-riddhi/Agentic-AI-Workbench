@@ -93,6 +93,11 @@ export const modelsApi = {
     ctx_size?: number;
     n_gpu_layers?: number;
     threads?: number;
+    n_cpu_moe?: number;
+    mmap?: boolean;
+    mlock?: boolean;
+    cache_type_k?: string;
+    cache_type_v?: string;
     wait_ready?: boolean;
     timeout?: number;
   }): Promise<ModelRuntimeStatus> => {

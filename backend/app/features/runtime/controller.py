@@ -35,6 +35,11 @@ def start_model(req: ModelStartRequest):
             ctx_size=req.ctx_size,
             n_gpu_layers=req.n_gpu_layers,
             threads=req.threads,
+            n_cpu_moe=req.n_cpu_moe,
+            mmap=req.mmap,
+            mlock=req.mlock,
+            cache_type_k=req.cache_type_k,
+            cache_type_v=req.cache_type_v,
             wait_ready=req.wait_ready,
             timeout=req.timeout,
         )

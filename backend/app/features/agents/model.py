@@ -116,40 +116,97 @@ def update_agent(
     retries: int | None = None,
     tools: list[str] | None = None,
     documents: list[Document] | None = None,
+    fields_set: set[str] | None = None,
 ) -> Agent:
-    if name is not None:
-        agent.name = name
-    if description is not None:
-        agent.description = description
-    if instructions is not None:
-        agent.instructions = instructions
-    if model_id is not None:
-        agent.model_id = model_id
-    if model_name is not None:
-        agent.model = model_name
-    if trigger is not None:
-        agent.trigger = trigger
-    if schedule is not None:
-        agent.schedule = schedule
-    if max_execution_time is not None:
-        agent.max_execution_time = max_execution_time
-    if max_tool_calls is not None:
-        agent.max_tool_calls = max_tool_calls
-    if concurrency is not None:
-        agent.concurrency = concurrency
-    if retries is not None:
-        agent.retries = retries
-    if tools is not None:
-        agent.tools = tools
-    if documents is not None:
-        agent.documents = documents
+    if fields_set is not None:
+        if "name" in fields_set and name is not None:
+            agent.name = name
+        if "description" in fields_set:
+            agent.description = description.strip() if (description and description.strip()) else None
+        elif description is not None:
+            agent.description = description
+        if "instructions" in fields_set and instructions is not None:
+            agent.instructions = instructions
+        if "model_id" in fields_set:
+            if model_id is not None:
+                agent.model_id = model_id
+            if model_name is not None:
+                agent.model = model_name
+        elif model_id is not None:
+            agent.model_id = model_id
+            if model_name is not None:
+                agent.model = model_name
+        if "trigger" in fields_set and trigger is not None:
+            agent.trigger = trigger
+            if trigger == AgentTrigger.MANUAL and "schedule" not in fields_set:
+                agent.schedule = None
+        elif trigger is not None:
+            agent.trigger = trigger
+        if "schedule" in fields_set:
+            agent.schedule = schedule.strip() if (schedule and schedule.strip()) else None
+        elif schedule is not None:
+            agent.schedule = schedule
+        if "max_execution_time" in fields_set and max_execution_time is not None:
+            agent.max_execution_time = max_execution_time
+        elif max_execution_time is not None:
+            agent.max_execution_time = max_execution_time
+        if "max_tool_calls" in fields_set and max_tool_calls is not None:
+            agent.max_tool_calls = max_tool_calls
+        elif max_tool_calls is not None:
+            agent.max_tool_calls = max_tool_calls
+        if "concurrency" in fields_set and concurrency is not None:
+            agent.concurrency = concurrency
+        elif concurrency is not None:
+            agent.concurrency = concurrency
+        if "retries" in fields_set and retries is not None:
+            agent.retries = retries
+        elif retries is not None:
+            agent.retries = retries
+        if "tools" in fields_set and tools is not None:
+            agent.tools = tools
+        elif tools is not None:
+            agent.tools = tools
+        if "document_ids" in fields_set and documents is not None:
+            agent.documents = documents
+        elif documents is not None:
+            agent.documents = documents
+    else:
+        if name is not None:
+            agent.name = name
+        if description is not None:
+            agent.description = description
+        if instructions is not None:
+            agent.instructions = instructions
+        if model_id is not None:
+            agent.model_id = model_id
+        if model_name is not None:
+            agent.model = model_name
+        if trigger is not None:
+            agent.trigger = trigger
+            if trigger == AgentTrigger.MANUAL:
+                agent.schedule = None
+        if schedule is not None:
+            agent.schedule = schedule
+        if max_execution_time is not None:
+            agent.max_execution_time = max_execution_time
+        if max_tool_calls is not None:
+            agent.max_tool_calls = max_tool_calls
+        if concurrency is not None:
+            agent.concurrency = concurrency
+        if retries is not None:
+            agent.retries = retries
+        if tools is not None:
+            agent.tools = tools
+        if documents is not None:
+            agent.documents = documents
 
     agent.updated_at = datetime.now()
 
     db.add(agent)
     db.commit()
-    db.refresh(agent)
-    return agent
+    refreshed = get_agent(db, agent.id)
+    return refreshed or agent
+
 
 
 def delete_agent(db: Session, agent: Agent) -> None:

@@ -1,13 +1,13 @@
 """Tool: Edit File
-Performs find-and-replace or targeted substring edits within an existing file.
+Performs find-and-replace or targeted substring edits within an existing file,
+strictly restricted to files within the backend/outputs directory.
 """
 
 from pathlib import Path
 import re
 from typing import Any
 
-
-from app.tools.file_security import resolve_safe_path
+from app.tools.file.file_security import resolve_output_path
 
 
 def edit_file(
@@ -18,10 +18,10 @@ def edit_file(
     is_regex: bool = False,
     encoding: str = "utf-8",
 ) -> dict[str, Any]:
-    """Edits a file inside the uploads directory by replacing target_content with replacement_content.
+    """Edits a file strictly inside the outputs directory by replacing target_content with replacement_content.
 
     Args:
-        file_path: Path to the file inside the uploads directory.
+        file_path: Path or filename of the file inside backend/outputs.
         target_content: String or regex pattern to search for.
         replacement_content: String to replace the target with.
         replace_all: If True, replace all occurrences; otherwise, only the first occurrence.
@@ -32,24 +32,24 @@ def edit_file(
         dict: Result containing 'success', 'file_path', and 'replacements_count'.
     """
     try:
-        path = resolve_safe_path(file_path)
+        path = resolve_output_path(file_path)
     except (PermissionError, ValueError) as err:
         return {
             "success": False,
-            "error": str(err),
+            "error": f"Access denied: edit_file can only modify files inside the outputs folder. {err}",
             "file_path": str(file_path),
         }
 
     if not path.exists():
         return {
             "success": False,
-            "error": f"File does not exist: {file_path}",
+            "error": f"File does not exist in outputs folder: {file_path}",
             "file_path": str(path),
         }
     if not path.is_file():
         return {
             "success": False,
-            "error": f"Path is not a file: {file_path}",
+            "error": f"Path in outputs is not a file: {file_path}",
             "file_path": str(path),
         }
 
@@ -88,9 +88,20 @@ def edit_file(
         with open(path, "w", encoding=encoding, errors="replace") as f:
             f.write(new_content)
 
+        try:
+            from app.runtime.agent_runtime import record_tool_generated_output
+            record_tool_generated_output(
+                file_path=str(path),
+                title=path.name,
+                content_preview=new_content[:500] if new_content else None,
+            )
+        except Exception:
+            pass
+
         return {
             "success": True,
             "file_path": str(path),
+            "filename": path.name,
             "replacements_count": actual_replaced,
             "total_matches": count,
         }

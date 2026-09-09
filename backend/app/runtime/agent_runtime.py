@@ -4,6 +4,7 @@ parsing JSON tool calls, executing assigned tools, and feeding results back into
 """
 
 from datetime import datetime, timezone
+import contextvars
 import json
 import logging
 import re
@@ -13,14 +14,103 @@ import time
 from typing import Any
 from uuid import UUID, uuid4
 
-if hasattr(sys.stdout, "reconfigure"):
+logger = logging.getLogger(__name__)
+
+current_execution_context: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "current_execution_context", default=None
+)
+
+
+def record_tool_generated_output(
+    file_path: str,
+    title: str | None = None,
+    output_type: str | None = None,
+    content_preview: str | None = None,
+) -> dict[str, Any] | None:
+    """Helper invoked by file creation tools to immediately record generated outputs in agent_outputs."""
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        from pathlib import Path
+        import mimetypes
+        from database.database import SessionLocal
+        from database.models.agent_output import AgentOutput
+
+        p = Path(file_path).resolve()
+        if not p.exists() or not p.is_file():
+            return None
+
+        ctx = current_execution_context.get() or {}
+        agent_id = ctx.get("agent_id")
+        agent_name = ctx.get("agent_name")
+        execution_id = ctx.get("execution_id")
+        action_id = ctx.get("action_id")
+
+        f_size = p.stat().st_size
+        f_ext = p.suffix.lower().lstrip(".")
+        actual_output_type = output_type or (f_ext if f_ext else "file")
+        m_type = mimetypes.guess_type(str(p))[0]
+        actual_title = title or p.name
+
+        with SessionLocal() as db:
+            from sqlalchemy import select
+            # Check if output already recorded for this execution and file
+            existing = None
+            if execution_id:
+                existing = db.scalar(
+                    select(AgentOutput).where(
+                        AgentOutput.execution_id == str(execution_id),
+                        AgentOutput.file_path == str(p),
+                    )
+                )
+            if existing:
+                existing.file_size = f_size
+                existing.content_preview = content_preview
+                db.commit()
+                return {
+                    "id": str(existing.id),
+                    "title": existing.title,
+                    "output_type": existing.output_type,
+                    "file_path": existing.file_path,
+                    "file_size": existing.file_size,
+                }
+
+            out_rec = AgentOutput(
+                id=uuid4(),
+                agent_id=agent_id,
+                agent_name=agent_name,
+                execution_id=str(execution_id) if execution_id else None,
+                action_id=action_id,
+                title=actual_title,
+                output_type=actual_output_type,
+                file_path=str(p),
+                file_size=f_size,
+                mime_type=m_type,
+                content_preview=content_preview,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(out_rec)
+            db.commit()
+            logger.info("Recorded tool output '%s' in agent_outputs table (ID: %s)", actual_title, out_rec.id)
+            return {
+                "id": str(out_rec.id),
+                "title": out_rec.title,
+                "output_type": out_rec.output_type,
+                "file_path": out_rec.file_path,
+                "file_size": out_rec.file_size,
+            }
+    except Exception as exc:
+        logger.warning("Failed to record tool output in agent_outputs table: %s", exc)
+        return None
+
+reconfigure_out = getattr(sys.stdout, "reconfigure", None)
+if callable(reconfigure_out):
+    try:
+        reconfigure_out(encoding="utf-8", errors="replace")
     except Exception:
         pass
-if hasattr(sys.stderr, "reconfigure"):
+reconfigure_err = getattr(sys.stderr, "reconfigure", None)
+if callable(reconfigure_err):
     try:
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        reconfigure_err(encoding="utf-8", errors="replace")
     except Exception:
         pass
 
@@ -30,23 +120,65 @@ from app.tools import TOOLS, TOOLS_MAP, run_tool
 from database.database import SessionLocal
 from database.models.agent import AgentTrigger
 
-logger = logging.getLogger(__name__)
-
 
 def build_accessible_tools(assigned_tool_names: list[str]) -> list[dict[str, Any]]:
     """Filters the global TOOLS registry to include only tools assigned to the agent."""
     assigned_set = set(assigned_tool_names or [])
+    if "create_file" in assigned_set:
+        assigned_set.add("write_create_file")
+    if "write_create_file" in assigned_set:
+        assigned_set.add("create_file")
     return [t for t in TOOLS if t.get("name") in assigned_set]
 
 
-def build_system_prompt(agent_name: str, accessible_tools: list[dict[str, Any]]) -> str:
-    """Constructs the system prompt instructing the agent on role, accessible tools,
+def detect_requested_file_format(text: str | None) -> str | None:
+    """Detects if instructions or user prompt requests a specific deliverable file format.
 
-    how to format JSON tool calls, and how to stop execution when finished.
+    Returns canonical format: 'xlsx', 'pdf', 'docx', 'pptx', 'csv', or 'md'.
+    """
+    if not text:
+        return None
+    lower = text.lower()
+
+    # Excel formats
+    if re.search(r"\b(xlsx|xlsl|xls|excel|spreadsheet|workbook)\b", lower):
+        return "xlsx"
+    # PDF format
+    if re.search(r"\bpdf\b", lower):
+        return "pdf"
+    # Word document formats
+    if re.search(r"\b(docx|doc|word\s+doc(ument)?)\b", lower):
+        return "docx"
+    # PowerPoint presentation formats
+    if re.search(r"\b(pptx|ppt|powerpoint|presentation|slide\s*deck|slides)\b", lower):
+        return "pptx"
+    # CSV data format
+    if re.search(r"\b(csv|comma\s+separated)\b", lower):
+        return "csv"
+    # Markdown text format
+    if re.search(r"\b(markdown|\.md\b)", lower):
+        return "md"
+
+    return None
+
+
+def build_system_prompt(
+    agent_name: str,
+    accessible_tools: list[dict[str, Any]],
+    instructions: str = "",
+    target_format: str | None = None,
+) -> str:
+    """Constructs the system prompt instructing the agent on role, instructions,
+
+    accessible tools, specific file type creation rules, how to format JSON tool calls,
+    and how to stop execution when finished.
     """
     tools_doc_list = []
+    has_create_file = False
     for t in accessible_tools:
         name = t.get("name", "")
+        if name in ("create_file", "write_create_file"):
+            has_create_file = True
         desc = t.get("description", "")
         params = t.get("parameters", {})
         tools_doc_list.append(
@@ -61,11 +193,69 @@ def build_system_prompt(agent_name: str, accessible_tools: list[dict[str, Any]])
         else "No external tools assigned. Rely solely on your internal knowledge."
     )
 
+    detected_fmt = target_format or detect_requested_file_format(instructions)
+
+    # Core instructions section
+    instructions_block = ""
+    if instructions and instructions.strip():
+        instructions_block = (
+            f"=== AGENT ASSIGNED INSTRUCTIONS & MISSION ===\n"
+            f"{instructions.strip()}\n\n"
+            f"CRITICAL REQUIREMENT: You MUST strictly fulfill all objectives, rules, and deliverable constraints defined in your assigned instructions above.\n\n"
+        )
+
+    # Deliverable file rules section
+    file_rules_block = ""
+    if has_create_file:
+        fmt_names = {
+            "xlsx": "Microsoft Excel spreadsheet (.xlsx)",
+            "pdf": "Adobe PDF document (.pdf)",
+            "docx": "Microsoft Word document (.docx)",
+            "pptx": "PowerPoint presentation (.pptx)",
+            "csv": "CSV spreadsheet (.csv)",
+            "md": "Markdown document (.md)",
+        }
+        target_highlight = ""
+        if detected_fmt and detected_fmt in fmt_names:
+            target_desc = fmt_names[detected_fmt]
+            target_highlight = (
+                f"\n🚨 TARGET DELIVERABLE DETECTED IN INSTRUCTIONS: {target_desc.upper()}\n"
+                f"Your instructions require creating a {target_desc}.\n"
+                f"You MUST invoke the `create_file` tool with:\n"
+                f'  * "file_type": "{detected_fmt}"\n'
+                f'  * "file_path": "<descriptive_filename>.{detected_fmt}"\n'
+                f"Do NOT substitute with any other format (.md, .txt, etc.) or conclude without creating this file!\n\n"
+            )
+
+        file_rules_block = (
+            f"=== MANDATORY FILE CREATION & FORMAT RULES ===\n"
+            f"{target_highlight}"
+            f"1. STRICT COMPLIANCE WITH REQUESTED FORMATS:\n"
+            f"   When instructions or tasks request generating a report, spreadsheet, presentation, document, or dataset:\n"
+            f"   - You MUST invoke the `create_file` tool to create the actual file on disk.\n"
+            f"   - NEVER simply output the document content as text in your final response without creating the file!\n\n"
+            f"2. NATIVE FORMAT MATRIX (`file_type` parameter in `create_file`):\n"
+            f"   - 'xlsx' : Generates a native Excel workbook (.xlsx). Provide tabular CSV rows or Markdown table in `content`.\n"
+            f"   - 'pdf'  : Generates a styled PDF report (.pdf). Provide structured markdown with headings (#, ##) and tables in `content`.\n"
+            f"   - 'docx' : Generates a Microsoft Word document (.docx). Provide structured markdown with headings in `content`.\n"
+            f"   - 'pptx' : Generates a PowerPoint presentation (.pptx). Provide slide markdown with '# Slide Title' and bullet points in `content`.\n"
+            f"   - 'csv'  : Generates a CSV data file (.csv). Provide comma-separated values with header row in `content`.\n"
+            f"   - 'md'   : Generates a Markdown document (.md). Provide markdown text in `content`.\n\n"
+            f"3. STRICT EXTENSION & PARAMETER MATCHING:\n"
+            f"   - Always specify the appropriate filename extension in `file_path` (e.g. 'sales_report.xlsx', 'audit.pdf', 'analysis.docx', 'summary.csv', 'deck.pptx').\n"
+            f"   - Always pass the matching `file_type` (e.g. 'xlsx', 'pdf', 'docx', 'pptx', 'csv', 'md').\n"
+            f"   - Always pass a clean, descriptive `title` for the deliverable.\n\n"
+            f"4. EXECUTION SEQUENCE:\n"
+            f"   Invoke `create_file` FIRST. Wait for the tool result confirmation. THEN provide your final answer or done signal.\n\n"
+        )
+
     return (
         f"You are an autonomous AI agent named '{agent_name}'.\n"
         f"Your mission is to carry out your assigned instructions with precision, using the tools available to you.\n\n"
+        f"{instructions_block}"
         f"=== ACCESSIBLE TOOLS ===\n"
         f"{tools_section}\n\n"
+        f"{file_rules_block}"
         f"=== HOW TO CALL TOOLS ===\n"
         f"When you need to execute a tool, your output MUST contain a JSON tool call block in one of the following formats:\n\n"
         f"```json\n"
@@ -355,12 +545,12 @@ class AgentRuntime:
 
     def is_alive(self) -> bool:
         """Checks if the runtime is marked running and its thread is currently alive."""
-        return bool(self.running and self.runtime_thread is not None and self.runtime_thread.is_alive())
+        return self.running and self.runtime_thread is not None and self.runtime_thread.is_alive()
 
     def get_status(self, db=None) -> dict[str, Any]:
         """Returns current runtime status and active agent count."""
-        scheduler_alive = bool(self.runtime_thread is not None and self.runtime_thread.is_alive())
-        is_active = bool(self.running and scheduler_alive)
+        scheduler_alive = self.runtime_thread is not None and self.runtime_thread.is_alive()
+        is_active = self.running and scheduler_alive
 
         active_count = 0
         try:
@@ -570,7 +760,13 @@ class AgentRuntime:
         # 2. Build accessible tools & system prompt
         accessible_tools = build_accessible_tools(assigned_tool_names)
         accessible_tool_names = [t["name"] for t in accessible_tools]
-        system_prompt = build_system_prompt(agent_name=agent_name, accessible_tools=accessible_tools)
+        detected_target_format = detect_requested_file_format(initial_prompt) or detect_requested_file_format(instructions)
+        system_prompt = build_system_prompt(
+            agent_name=agent_name,
+            accessible_tools=accessible_tools,
+            instructions=instructions,
+            target_format=detected_target_format,
+        )
 
         # 3. Build initial conversation prompt
         prompt_parts = []
@@ -640,6 +836,16 @@ class AgentRuntime:
         working = True
         final_answer = ""
         executed_tool_calls: list[dict[str, Any]] = []
+
+        execution_id_str = str(uuid4())
+        action_id = uuid4()
+        agent_id_uuid = agent_id if isinstance(agent_id, UUID) else UUID(str(agent_id))
+        ctx_token = current_execution_context.set({
+            "agent_id": agent_id_uuid,
+            "agent_name": agent_name,
+            "execution_id": execution_id_str,
+            "action_id": action_id,
+        })
 
         try:
             while working and self.running:
@@ -776,7 +982,11 @@ class AgentRuntime:
                     print(f"\n⚙️ [TASK: TOOL INVOCATION #{tool_call_count}] Tool: `{tool_name}`")
                     print(f"   Parameters: {json.dumps(tool_args, default=str)}")
 
-                if tool_name not in accessible_tool_names:
+                is_authorized = (
+                    tool_name in accessible_tool_names
+                    or (tool_name in ("create_file", "write_create_file") and any(a in accessible_tool_names for a in ("create_file", "write_create_file")))
+                )
+                if not is_authorized:
                     tool_output = {
                         "success": False,
                         "error": (
@@ -846,15 +1056,22 @@ class AgentRuntime:
                 except Exception as e:
                     logger.error("Error clearing runtime record for agent %s: %s", agent_id, e)
 
-            # Record final output in agent_actions table
+            # Record final output in agent_actions and agent_outputs tables
+            saved_outputs_info = []
+
             try:
                 with SessionLocal() as db:
                     from database.models.agent_action import AgentAction
+                    from database.models.agent_output import AgentOutput
+                    from app.tools.file.file_security import get_outputs_dir, get_upload_dir, resolve_safe_path
+                    from pathlib import Path
+                    import mimetypes
+
                     action_record = AgentAction(
-                        id=uuid4(),
-                        agent_id=agent_id if isinstance(agent_id, UUID) else UUID(str(agent_id)),
+                        id=action_id,
+                        agent_id=agent_id_uuid,
                         agent_name=agent_name,
-                        execution_id=str(uuid4()),
+                        execution_id=execution_id_str,
                         prompt=initial_prompt,
                         final_output=final_answer or "Execution concluded.",
                         status="completed" if ("Error calling model" not in (final_answer or "")) else "failed",
@@ -864,10 +1081,127 @@ class AgentRuntime:
                         created_at=datetime.now(timezone.utc),
                     )
                     db.add(action_record)
+
+                    # Inspect executed tool calls for created/modified output files (e.g. PDF, CSV, Excel, TXT)
+                    seen_files = set()
+                    for call in executed_tool_calls:
+                        res = call.get("result")
+                        if not isinstance(res, dict) or not res.get("success", True):
+                            continue
+
+                        candidate_paths = []
+                        for key in ("file_path", "archive_path", "destination_path", "output_path", "path"):
+                            val = res.get(key)
+                            if val and isinstance(val, str):
+                                candidate_paths.append(val)
+
+                        for cand in candidate_paths:
+                            try:
+                                p = Path(cand)
+                                if not p.is_absolute():
+                                    p = resolve_safe_path(cand)
+                                if p.exists() and p.is_file():
+                                    norm = str(p.resolve())
+                                    if norm not in seen_files:
+                                        seen_files.add(norm)
+                                        f_size = p.stat().st_size
+                                        f_ext = p.suffix.lower().lstrip(".")
+                                        m_type = mimetypes.guess_type(str(p))[0]
+                                        output_type = f_ext if f_ext else "file"
+                                        out_rec = AgentOutput(
+                                            id=uuid4(),
+                                            agent_id=agent_id_uuid,
+                                            agent_name=agent_name,
+                                            execution_id=execution_id_str,
+                                            action_id=action_id,
+                                            title=p.name,
+                                            output_type=output_type,
+                                            file_path=str(p),
+                                            file_size=f_size,
+                                            mime_type=m_type,
+                                            content_preview=None,
+                                            created_at=datetime.now(timezone.utc),
+                                        )
+                                        db.add(out_rec)
+                                        saved_outputs_info.append({
+                                            "id": str(out_rec.id),
+                                            "title": out_rec.title,
+                                            "output_type": out_rec.output_type,
+                                            "file_path": out_rec.file_path,
+                                            "file_size": out_rec.file_size,
+                                        })
+                                        logger.info("Recorded agent output file '%s' (type: %s, size: %d bytes)", p.name, output_type, f_size)
+                            except Exception as parse_err:
+                                logger.warning("Could not process candidate output file '%s': %s", cand, parse_err)
+
+                    # If no dedicated file was created by tools, persist the final response into the requested deliverable format
+                    if final_answer and final_answer.strip():
+                        if not saved_outputs_info:
+                            try:
+                                target_fmt = detected_target_format or "md"
+                                outputs_dir = get_outputs_dir()
+                                outputs_dir.mkdir(parents=True, exist_ok=True)
+                                safe_slug = re.sub(r"[^\w\-]", "_", agent_name.lower())[:30]
+                                out_filename = f"{safe_slug}_{execution_id_str[:8]}.{target_fmt}"
+
+                                from app.tools.file.create_file import create_file
+                                file_title = f"{agent_name} Deliverable"
+                                create_res = create_file(
+                                    file_path=out_filename,
+                                    content=final_answer,
+                                    file_type=target_fmt,
+                                    title=file_title,
+                                )
+
+                                created_p = outputs_dir / out_filename
+                                if isinstance(create_res, dict) and create_res.get("file_path"):
+                                    created_p = Path(create_res["file_path"])
+
+                                if created_p.exists():
+                                    f_size = created_p.stat().st_size
+                                    m_type = mimetypes.guess_type(str(created_p))[0] or "application/octet-stream"
+                                    out_type = (create_res.get("created_format") if isinstance(create_res, dict) else None) or target_fmt
+
+                                    existing = db.query(AgentOutput).filter(AgentOutput.file_path == str(created_p)).first()
+                                    if not existing:
+                                        text_rec = AgentOutput(
+                                            id=uuid4(),
+                                            agent_id=agent_id_uuid,
+                                            agent_name=agent_name,
+                                            execution_id=execution_id_str,
+                                            action_id=action_id,
+                                            title=out_filename,
+                                            output_type=out_type,
+                                            file_path=str(created_p),
+                                            file_size=f_size,
+                                            mime_type=m_type,
+                                            content_preview=final_answer[:500],
+                                            created_at=datetime.now(timezone.utc),
+                                        )
+                                        db.add(text_rec)
+                                        saved_outputs_info.append({
+                                            "id": str(text_rec.id),
+                                            "title": text_rec.title,
+                                            "output_type": text_rec.output_type,
+                                            "file_path": text_rec.file_path,
+                                            "file_size": text_rec.file_size,
+                                        })
+                                    else:
+                                        saved_outputs_info.append({
+                                            "id": str(existing.id),
+                                            "title": existing.title,
+                                            "output_type": existing.output_type,
+                                            "file_path": existing.file_path,
+                                            "file_size": existing.file_size,
+                                        })
+                                    logger.info("Recorded final deliverable '%s' (type: %s) in agent_outputs", out_filename, out_type)
+                            except Exception as text_err:
+                                logger.warning("Could not persist final deliverable: %s", text_err)
+
                     db.commit()
                     logger.info("Recorded agent final output in agent_actions table (ID: %s)", action_record.id)
             except Exception as action_err:
-                logger.error("Failed to record agent action for agent %s: %s", agent_id, action_err)
+                logger.error("Failed to record agent action or outputs for agent %s: %s", agent_id, action_err)
 
 
             if print_to_terminal:
@@ -881,6 +1215,7 @@ class AgentRuntime:
                 "agent_id": str(agent_id),
                 "agent_name": agent_name,
                 "response": final_answer or "Execution concluded.",
+                "outputs": saved_outputs_info,
                 "tool_calls": executed_tool_calls,
                 "tool_call_count": tool_call_count,
                 "step_count": step_count,
@@ -888,11 +1223,18 @@ class AgentRuntime:
                 "timestamp": datetime.now().isoformat(),
             })
 
+            if ctx_token:
+                try:
+                    current_execution_context.reset(ctx_token)
+                except Exception:
+                    pass
+
         return {
             "success": True,
             "agent_id": str(agent_id),
             "agent_name": agent_name,
             "response": final_answer or "Execution concluded.",
+            "outputs": saved_outputs_info,
             "tool_calls": executed_tool_calls,
             "tool_call_count": tool_call_count,
             "elapsed_seconds": round(time.time() - start_time, 2),
@@ -928,5 +1270,6 @@ __all__ = [
     "agent_runtime",
     "build_accessible_tools",
     "build_system_prompt",
+    "detect_requested_file_format",
     "extract_tool_call",
 ]

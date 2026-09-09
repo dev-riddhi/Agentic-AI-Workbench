@@ -28,8 +28,11 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
+from pathlib import Path
+
 # Ensure backend root is on sys.path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+backend_dir = Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name == "test" else Path(__file__).resolve().parent
+sys.path.insert(0, str(backend_dir))
 
 from database.database import SessionLocal
 from database.models import Agent, AIModel, Document, Runtime, User
@@ -191,7 +194,7 @@ def run_agent_test():
 
     # 3. Test File Target
     timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    test_file_rel = f"uploads/test_agent_run_{timestamp_str}.txt"
+    test_file_rel = f"outputs/test_agent_run_{timestamp_str}.md"
     test_content = f"Workbench Agent verified at {timestamp_str}. System operating normally."
 
     test_prompt = (
@@ -258,8 +261,8 @@ def run_agent_test():
     print(f"  ✅ Tool calls recorded: {[tc['name'] for tc in tool_calls]}")
     test_results.append(("Multi-Turn Tool Invocations", True))
 
-    # 7. Verify File Written to Uploads
-    backend_root = os.path.dirname(os.path.abspath(__file__))
+    # 7. Verify File Written to Outputs
+    backend_root = str(backend_dir)
     expected_full_path = os.path.join(backend_root, test_file_rel.replace("/", os.sep))
     print(f"  • Checking generated file: {expected_full_path}")
     assert os.path.exists(expected_full_path), f"File was not created at {expected_full_path}"

@@ -16,6 +16,9 @@ import {
   Send,
   Shield,
   Bot,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   ActiveAgentRuntimeItem,
@@ -26,6 +29,7 @@ import {
 } from '@/lib/api/types';
 import { runtimeApi } from '@/lib/api/runtime';
 import { modelsApi } from '@/lib/api/models';
+import { parseUTCDate } from '@/lib/utils/date';
 import { useToast } from '@/context/toast-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -50,6 +54,12 @@ export default function RuntimePage() {
   const [runtimePort, setRuntimePort] = useState<number>(8080);
   const [runtimeCtxSize, setRuntimeCtxSize] = useState<number>(4096);
   const [runtimeGpuLayers, setRuntimeGpuLayers] = useState<number>(99);
+  const [runtimeNCpuMoe, setRuntimeNCpuMoe] = useState<number | ''>('');
+  const [runtimeMmap, setRuntimeMmap] = useState<boolean>(true);
+  const [runtimeMlock, setRuntimeMlock] = useState<boolean>(false);
+  const [runtimeCacheK, setRuntimeCacheK] = useState<string>('turbo4');
+  const [runtimeCacheV, setRuntimeCacheV] = useState<string>('turbo3');
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(true);
   const [isStartingRuntime, setIsStartingRuntime] = useState(false);
   const [isStoppingRuntime, setIsStoppingRuntime] = useState(false);
   const [runtimeLogs, setRuntimeLogs] = useState<string[]>([]);
@@ -219,6 +229,11 @@ export default function RuntimePage() {
         port: Number(runtimePort) || 8080,
         ctx_size: Number(runtimeCtxSize) || 4096,
         n_gpu_layers: Number(runtimeGpuLayers) || 99,
+        n_cpu_moe: runtimeNCpuMoe !== '' ? Number(runtimeNCpuMoe) : undefined,
+        mmap: runtimeMmap,
+        mlock: runtimeMlock,
+        cache_type_k: runtimeCacheK.trim() || undefined,
+        cache_type_v: runtimeCacheV.trim() || undefined,
         wait_ready: true,
       });
       setModelRuntime(status);
@@ -689,10 +704,10 @@ export default function RuntimePage() {
                           {item.thread_name || item.id.slice(0, 12)}
                         </td>
                         <td className="py-3 px-4 text-zinc-600 dark:text-zinc-400 font-mono text-[11px]">
-                          {new Date(item.started_at).toLocaleTimeString()}
+                          {parseUTCDate(item.started_at).toLocaleTimeString()}
                         </td>
                         <td className="py-3 px-4 text-emerald-600 dark:text-emerald-400/90 font-mono text-[11px]">
-                          {new Date(item.last_heartbeat).toLocaleTimeString()}
+                          {parseUTCDate(item.last_heartbeat).toLocaleTimeString()}
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
@@ -830,10 +845,35 @@ export default function RuntimePage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-400 text-[11px]">
+                <div className="flex flex-wrap items-center gap-3 text-zinc-600 dark:text-zinc-400 text-[11px]">
                   <span>Ctx: <b className="text-zinc-800 dark:text-zinc-200">{modelRuntime.ctx_size}</b></span>
                   <span>GPU Offload: <b className="text-zinc-800 dark:text-zinc-200">{modelRuntime.n_gpu_layers} layers</b></span>
                   <span>Threads: <b className="text-zinc-800 dark:text-zinc-200">{modelRuntime.threads || 'Auto'}</b></span>
+                  {modelRuntime.n_cpu_moe && (
+                    <span className="text-cyan-600 dark:text-cyan-400 font-mono">
+                      MoE: <b>{modelRuntime.n_cpu_moe} cpus</b>
+                    </span>
+                  )}
+                  {modelRuntime.mmap && (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-mono">
+                      mmap: <b>ON</b>
+                    </span>
+                  )}
+                  {modelRuntime.mlock && (
+                    <span className="text-amber-600 dark:text-amber-400 font-mono">
+                      mlock: <b>ON</b>
+                    </span>
+                  )}
+                  {modelRuntime.cache_type_k && (
+                    <span className="text-violet-600 dark:text-violet-400 font-mono">
+                      K-Cache: <b>{modelRuntime.cache_type_k}</b>
+                    </span>
+                  )}
+                  {modelRuntime.cache_type_v && (
+                    <span className="text-fuchsia-600 dark:text-fuchsia-400 font-mono">
+                      V-Cache: <b>{modelRuntime.cache_type_v}</b>
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -912,6 +952,119 @@ export default function RuntimePage() {
                       className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
                     />
                   </div>
+                </div>
+
+                {/* Advanced CLI Flags */}
+                <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-zinc-50/50 dark:bg-zinc-950/40">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/60 dark:hover:bg-zinc-900/60 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-500" />
+                      <span>Advanced CLI Flags</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-mono">
+                        Optional
+                      </span>
+                    </span>
+                    {showAdvancedOptions ? (
+                      <ChevronUp className="w-4 h-4 text-zinc-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-zinc-400" />
+                    )}
+                  </button>
+
+                  {showAdvancedOptions && (
+                    <div className="p-3.5 pt-1 space-y-3 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                      {/* Row 1: n-cpu-moe, cache-type-k, cache-type-v */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-mono mb-1 text-[11px] font-semibold">
+                            --n-cpu-moe
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            placeholder="e.g. 4"
+                            value={runtimeNCpuMoe}
+                            onChange={(e) =>
+                              setRuntimeNCpuMoe(e.target.value === '' ? '' : Number(e.target.value))
+                            }
+                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                          <p className="text-[10px] text-zinc-500 mt-0.5">CPU threads for MoE routing</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-mono mb-1 text-[11px] font-semibold">
+                            --cache-type-k
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="turbo4"
+                            value={runtimeCacheK}
+                            onChange={(e) => setRuntimeCacheK(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: turbo4</p>
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-600 dark:text-zinc-400 font-mono mb-1 text-[11px] font-semibold">
+                            --cache-type-v
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="turbo3"
+                            value={runtimeCacheV}
+                            onChange={(e) => setRuntimeCacheV(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-200 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                          />
+                          <p className="text-[10px] text-zinc-500 mt-0.5">Default: turbo3</p>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Memory flags (mmap & mlock) */}
+                      <div className="pt-1 flex flex-wrap items-center gap-4">
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-mono text-zinc-700 dark:text-zinc-300 select-none">
+                          <input
+                            type="checkbox"
+                            checked={runtimeMmap}
+                            onChange={(e) => setRuntimeMmap(e.target.checked)}
+                            className="rounded border-zinc-400 dark:border-zinc-700 text-cyan-600 focus:ring-cyan-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span>--mmap (Memory mapped weights)</span>
+                        </label>
+
+                        <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-mono text-zinc-700 dark:text-zinc-300 select-none">
+                          <input
+                            type="checkbox"
+                            checked={runtimeMlock}
+                            onChange={(e) => setRuntimeMlock(e.target.checked)}
+                            className="rounded border-zinc-400 dark:border-zinc-700 text-cyan-600 focus:ring-cyan-500 w-4 h-4 cursor-pointer"
+                          />
+                          <span>--mlock (Lock model in RAM)</span>
+                        </label>
+                      </div>
+
+                      {/* Real-time CLI Preview */}
+                      <div className="mt-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                        <div className="text-[10px] font-mono text-zinc-500 mb-1 font-semibold flex items-center gap-1.5">
+                          <Terminal className="w-3 h-3 text-cyan-500" />
+                          <span>CLI INVOCATION PREVIEW</span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-zinc-900 text-cyan-400 font-mono text-[11px] leading-relaxed break-all border border-zinc-800 select-all">
+                          llama-server -m {selectedRuntimeModel || '&lt;model.gguf&gt;'} --port {runtimePort || 8080} -c {runtimeCtxSize || 4096} -ngl {runtimeGpuLayers}
+                          {runtimeNCpuMoe !== '' ? ` --n-cpu-moe ${runtimeNCpuMoe}` : ''}
+                          {runtimeMmap ? ' --mmap' : ' --no-mmap'}
+                          {runtimeMlock ? ' --mlock' : ''}
+                          {runtimeCacheK.trim() ? ` --cache-type-k ${runtimeCacheK.trim()}` : ''}
+                          {runtimeCacheV.trim() ? ` --cache-type-v ${runtimeCacheV.trim()}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button

@@ -1,14 +1,12 @@
 """Tool: Delete / Rename File
-Safely deletes or renames/moves files and directories.
+Safely deletes or renames/moves files and directories strictly inside the backend/outputs directory.
 """
 
-import os
 from pathlib import Path
 import shutil
 from typing import Any
 
-
-from app.tools.file_security import get_upload_dir, resolve_safe_path
+from app.tools.file.file_security import get_outputs_dir, resolve_output_path
 
 
 def delete_rename_file(
@@ -17,40 +15,40 @@ def delete_rename_file(
     target_path: str | None = None,
     recursive: bool = False,
 ) -> dict[str, Any]:
-    """Deletes or renames/moves a file or directory inside the uploads directory.
+    """Deletes or renames/moves a file or directory strictly inside the outputs directory.
 
     Args:
         action: Either 'delete' or 'rename' (or 'move').
-        source_path: Path to the target file or directory inside uploads.
-        target_path: Destination path inside uploads (required for 'rename'/'move').
+        source_path: Path to the target file or directory inside backend/outputs.
+        target_path: Destination path inside backend/outputs (required for 'rename'/'move').
         recursive: If True, allow recursive deletion of non-empty directories.
 
     Returns:
         dict: Result containing 'success', 'action', and paths.
     """
     try:
-        src = resolve_safe_path(source_path)
+        src = resolve_output_path(source_path)
     except (PermissionError, ValueError) as err:
         return {
             "success": False,
-            "error": str(err),
+            "error": f"Access denied: file operations are strictly restricted to the outputs folder. {err}",
             "source_path": str(source_path),
         }
 
     act = action.strip().lower()
-    upload_root = get_upload_dir()
+    outputs_root = get_outputs_dir()
 
-    if src == upload_root:
+    if src == outputs_root:
         return {
             "success": False,
-            "error": "Operation prohibited: Cannot delete or move the root uploads directory.",
+            "error": "Operation prohibited: Cannot delete or move the root outputs directory.",
             "source_path": str(src),
         }
 
     if not src.exists():
         return {
             "success": False,
-            "error": f"Source path does not exist: {source_path}",
+            "error": f"Source path does not exist in outputs folder: {source_path}",
             "source_path": str(src),
         }
 
@@ -78,18 +76,18 @@ def delete_rename_file(
                 }
 
             try:
-                dst = resolve_safe_path(target_path)
+                dst = resolve_output_path(target_path)
             except (PermissionError, ValueError) as err:
                 return {
                     "success": False,
-                    "error": str(err),
+                    "error": f"Access denied: target_path must be inside the outputs folder. {err}",
                     "source_path": str(src),
                 }
 
-            if dst == upload_root:
+            if dst == outputs_root:
                 return {
                     "success": False,
-                    "error": "Cannot overwrite or rename into the root uploads directory itself.",
+                    "error": "Cannot overwrite or rename into the root outputs directory itself.",
                     "source_path": str(src),
                 }
 

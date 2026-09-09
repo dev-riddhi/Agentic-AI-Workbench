@@ -74,6 +74,11 @@ export interface ModelRuntimeStatus {
   ctx_size: number;
   n_gpu_layers: number;
   threads?: number | null;
+  n_cpu_moe?: number | null;
+  mmap?: boolean | null;
+  mlock?: boolean | null;
+  cache_type_k?: string | null;
+  cache_type_v?: string | null;
   base_url: string;
   health_url: string;
   uptime_seconds?: number | null;
@@ -171,9 +176,9 @@ export interface AgentCreatePayload {
 
 export interface AgentUpdatePayload {
   name?: string;
-  description?: string;
+  description?: string | null;
   instructions?: string;
-  model_id?: string;
+  model_id?: string | null;
   trigger?: AgentTrigger;
   schedule?: string | null;
   max_execution_time?: number;
@@ -182,6 +187,12 @@ export interface AgentUpdatePayload {
   retries?: number;
   tools?: string[];
   document_ids?: string[];
+}
+
+export interface AgentRunRequest {
+  prompt?: string | null;
+  conversation_id?: string | null;
+  auto_restart?: boolean;
 }
 
 export interface AgentRunResponse {
@@ -294,4 +305,30 @@ export interface AgentActionRecord {
   }> | null;
   execution_time_seconds?: number | null;
   created_at: string;
+}
+
+export interface AgentOutput {
+  id: string;
+  agent_id?: string | null;
+  agent_name?: string | null;
+  execution_id?: string | null;
+  action_id?: string | null;
+  title: string;
+  output_type: string;
+  file_path?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  content_preview?: string | null;
+  created_at: string;
+}
+
+export interface AgentOutputPreview {
+  id: string;
+  title: string;
+  output_type: string;
+  file_path?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
+  content?: string | null;
+  is_binary: boolean;
 }

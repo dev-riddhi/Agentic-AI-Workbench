@@ -33,6 +33,11 @@ class ModelRuntime:
         self.ctx_size: int = 4096
         self.n_gpu_layers: int = 99
         self.threads: int | None = None
+        self.n_cpu_moe: int | None = None
+        self.mmap: bool | None = None
+        self.mlock: bool = False
+        self.cache_type_k: str | None = None
+        self.cache_type_v: str | None = None
         self.start_time: float | None = None
         self.logs: deque[str] = deque(maxlen=500)
         self._log_thread: threading.Thread | None = None
@@ -177,6 +182,11 @@ class ModelRuntime:
         ctx_size: int = 4096,
         n_gpu_layers: int = 99,
         threads: int | None = None,
+        n_cpu_moe: int | None = None,
+        mmap: bool | None = None,
+        mlock: bool = False,
+        cache_type_k: str | None = None,
+        cache_type_v: str | None = None,
         wait_ready: bool = True,
         timeout: float = 30.0,
         extra_args: list[str] | None = None,
@@ -214,6 +224,24 @@ class ModelRuntime:
                 "-t", str(cpu_threads),
             ]
 
+            # Optional performance and memory flags
+            if n_cpu_moe is not None and n_cpu_moe > 0:
+                cmd.extend(["--n-cpu-moe", str(n_cpu_moe)])
+
+            if mmap is True:
+                cmd.append("--mmap")
+            elif mmap is False:
+                cmd.append("--no-mmap")
+
+            if mlock:
+                cmd.append("--mlock")
+
+            if cache_type_k and str(cache_type_k).strip():
+                cmd.extend(["--cache-type-k", str(cache_type_k).strip()])
+
+            if cache_type_v and str(cache_type_v).strip():
+                cmd.extend(["--cache-type-v", str(cache_type_v).strip()])
+
             if extra_args:
                 cmd.extend(extra_args)
 
@@ -242,6 +270,11 @@ class ModelRuntime:
             self.ctx_size = ctx_size
             self.n_gpu_layers = n_gpu_layers
             self.threads = cpu_threads
+            self.n_cpu_moe = n_cpu_moe
+            self.mmap = mmap
+            self.mlock = mlock
+            self.cache_type_k = cache_type_k
+            self.cache_type_v = cache_type_v
             self.start_time = time.time()
 
             # Start background thread to capture stdout/stderr lines
@@ -311,6 +344,11 @@ class ModelRuntime:
             "ctx_size": self.ctx_size,
             "n_gpu_layers": self.n_gpu_layers,
             "threads": self.threads,
+            "n_cpu_moe": self.n_cpu_moe,
+            "mmap": self.mmap,
+            "mlock": self.mlock,
+            "cache_type_k": self.cache_type_k,
+            "cache_type_v": self.cache_type_v,
             "base_url": f"http://{self.host}:{self.port}/v1",
             "health_url": f"http://{self.host}:{self.port}/health",
             "uptime_seconds": round(uptime, 2) if uptime is not None else None,
@@ -335,6 +373,11 @@ def start_model_server(
     ctx_size: int = 4096,
     n_gpu_layers: int = 99,
     threads: int | None = None,
+    n_cpu_moe: int | None = None,
+    mmap: bool | None = None,
+    mlock: bool = False,
+    cache_type_k: str | None = None,
+    cache_type_v: str | None = None,
     wait_ready: bool = True,
     timeout: float = 30.0,
     extra_args: list[str] | None = None,
@@ -347,6 +390,11 @@ def start_model_server(
         ctx_size=ctx_size,
         n_gpu_layers=n_gpu_layers,
         threads=threads,
+        n_cpu_moe=n_cpu_moe,
+        mmap=mmap,
+        mlock=mlock,
+        cache_type_k=cache_type_k,
+        cache_type_v=cache_type_v,
         wait_ready=wait_ready,
         timeout=timeout,
         extra_args=extra_args,

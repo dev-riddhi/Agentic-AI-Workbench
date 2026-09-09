@@ -1,8 +1,13 @@
 """Comprehensive verification script for all 19 tools in backend/app/tools."""
 
 import os
+from pathlib import Path
 import shutil
+import sys
 import tempfile
+
+backend_dir = Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name == "test" else Path(__file__).resolve().parent
+sys.path.insert(0, str(backend_dir))
 from app.tools import (
     TOOLS,
     TOOLS_MAP,

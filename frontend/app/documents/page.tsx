@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { DocumentResponse } from '@/lib/api/types';
 import { documentsApi } from '@/lib/api/documents';
+import { parseUTCDate } from '@/lib/utils/date';
 import { useToast } from '@/context/toast-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -423,7 +424,7 @@ export default function DocumentsPage() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 font-mono text-zinc-500 dark:text-zinc-400 text-[11px]">
-                        {new Date(doc.created_at).toLocaleDateString(undefined, {
+                        {parseUTCDate(doc.created_at).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
                           day: 'numeric',
@@ -612,7 +613,7 @@ export default function DocumentsPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-500">INGESTED:</span>
-                        <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                        <span>{parseUTCDate(doc.created_at).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>

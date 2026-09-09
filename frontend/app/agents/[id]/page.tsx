@@ -23,11 +23,20 @@ import {
   Activity,
   CheckCircle2,
   RotateCw,
+  FolderDown,
+  Download,
+  FileSpreadsheet,
+  FileCode2,
+  Presentation,
+  Save,
+  Sparkles,
 } from 'lucide-react';
-import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger, AgentActionRecord } from '@/lib/api/types';
+import { Agent, AgentRunResponse, AIModelResponse, DocumentResponse, AgentTrigger, AgentActionRecord, AgentOutput } from '@/lib/api/types';
 import { agentsApi } from '@/lib/api/agents';
 import { modelsApi } from '@/lib/api/models';
 import { documentsApi } from '@/lib/api/documents';
+import { outputsApi } from '@/lib/api/outputs';
+import { parseUTCDate } from '@/lib/utils/date';
 import { useToast } from '@/context/toast-context';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -63,8 +72,8 @@ export default function AgentWorkspacePage({
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab');
 
-  const [activeTab, setActiveTab] = useState<'chat' | 'config' | 'tools' | 'knowledge' | 'actions'>(
-    initialTab === 'config' || initialTab === 'tools' || initialTab === 'knowledge' || initialTab === 'actions'
+  const [activeTab, setActiveTab] = useState<'chat' | 'config' | 'tools' | 'knowledge' | 'actions' | 'outputs'>(
+    initialTab === 'config' || initialTab === 'tools' || initialTab === 'knowledge' || initialTab === 'actions' || initialTab === 'outputs'
       ? initialTab
       : 'chat'
   );
@@ -84,11 +93,55 @@ export default function AgentWorkspacePage({
     }
   }, [id]);
 
+  const [agentOutputs, setAgentOutputs] = useState<AgentOutput[]>([]);
+  const [isLoadingOutputs, setIsLoadingOutputs] = useState(false);
+  const [downloadingOutputId, setDownloadingOutputId] = useState<string | null>(null);
+
+  const fetchOutputs = React.useCallback(async () => {
+    setIsLoadingOutputs(true);
+    try {
+      const data = await outputsApi.getOutputs({ agent_id: id });
+      setAgentOutputs(data || []);
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingOutputs(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     if (activeTab === 'actions') {
       fetchActions();
     }
-  }, [activeTab, fetchActions]);
+    if (activeTab === 'outputs') {
+      fetchOutputs();
+    }
+  }, [activeTab, fetchActions, fetchOutputs]);
+
+  // Pre-load outputs count on mount
+  useEffect(() => {
+    void fetchOutputs();
+  }, [fetchOutputs]);
+
+  const handleDownloadOutput = async (out: AgentOutput) => {
+    setDownloadingOutputId(out.id);
+    try {
+      let targetName = out.title;
+      if (out.file_path) {
+        const parts = out.file_path.replace(/\\/g, '/').split('/');
+        const realFileName = parts[parts.length - 1];
+        if (realFileName && realFileName.includes('.')) {
+          targetName = out.title?.includes('.') ? out.title : realFileName;
+        }
+      }
+      await outputsApi.downloadOutput(out.id, targetName, out.output_type);
+      toast.success(`Download started for ${targetName || out.title}`);
+    } catch {
+      toast.error('Download failed. The file may no longer be available on the server.');
+    } finally {
+      setDownloadingOutputId(null);
+    }
+  };
 
 
   const [agent, setAgent] = useState<Agent | null>(null);
@@ -131,6 +184,9 @@ export default function AgentWorkspacePage({
   const [configRetries, setConfigRetries] = useState(3);
   const [configSaveSuccess, setConfigSaveSuccess] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [savedAtTimestamp, setSavedAtTimestamp] = useState<string | null>(null);
+  const [headerUpdatedFlash, setHeaderUpdatedFlash] = useState(false);
 
   // Active Tool Category Filter for Tools Tab
   const [activeToolCategory, setActiveToolCategory] = useState<string>('all');
@@ -214,7 +270,7 @@ export default function AgentWorkspacePage({
   // Execute Agent Prompt via Real-time Server-Sent Events (SSE) stream with Keep-Alive
   const handleSendPrompt = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!prompt.trim() || isExecuting) return;
+    if (isExecuting) return;
 
     const userText = prompt.trim();
     setPrompt('');
@@ -222,7 +278,7 @@ export default function AgentWorkspacePage({
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
       role: 'user',
-      content: userText,
+      content: userText || 'Manual Run (Default Agent Instructions)',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -250,7 +306,7 @@ export default function AgentWorkspacePage({
     try {
       await agentsApi.runAgentStream({
         id,
-        prompt: userText,
+        prompt: userText || null,
         signal: abortController.signal,
         onEvent: (event) => {
           if (event.type === 'ping') {
@@ -409,32 +465,84 @@ export default function AgentWorkspacePage({
   };
 
   // Save Inline Configuration
-  const handleSaveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveConfig = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    if (!configName.trim()) {
+      toast.error('Agent designation (name) cannot be empty.', 'Validation Error');
+      return;
+    }
+    if (!configInstructions.trim()) {
+      toast.error('System instructions and reasoning directives cannot be empty.', 'Validation Error');
+      return;
+    }
+
     setIsSavingConfig(true);
+    setSaveStatus('saving');
+
+    const targetModelId =
+      configModelId ||
+      (models.length > 0 ? models[0].id : agent?.model_id) ||
+      undefined;
+
+    const payload = {
+      name: configName.trim(),
+      description: configDesc.trim() || null,
+      instructions: configInstructions.trim(),
+      model_id: targetModelId,
+      tools: configTools,
+      trigger: configTrigger,
+      schedule: (configTrigger === 'schedule' || configTrigger === 'onetime')
+        ? (configSchedule.trim() || null)
+        : null,
+      max_execution_time: Number(configMaxExecutionTime) || 15,
+      max_tool_calls: Number(configMaxToolCalls) || 40,
+      concurrency: Number(configConcurrency) || 1,
+      retries: Number(configRetries) || 0,
+    };
+
     try {
-      const updated = await agentsApi.updateAgent(id, {
-        name: configName.trim(),
-        description: configDesc.trim() || undefined,
-        instructions: configInstructions.trim(),
-        model_id: configModelId,
-        tools: configTools,
-        trigger: configTrigger,
-        schedule: (configTrigger === 'schedule' || configTrigger === 'onetime') ? configSchedule : undefined,
-        max_execution_time: configMaxExecutionTime,
-        max_tool_calls: configMaxToolCalls,
-        concurrency: configConcurrency,
-        retries: configRetries,
-      });
+      const updated = await agentsApi.updateAgent(id, payload);
       setAgent(updated);
+
+      // Synchronize local form inputs with updated backend agent
+      setConfigName(updated.name);
+      setConfigDesc(updated.description || '');
+      setConfigInstructions(updated.instructions);
+      setConfigModelId(updated.model_id || '');
+      setConfigTools(updated.tools?.map((t) => t.name) || []);
+      setConfigTrigger(updated.trigger || 'manual');
+      setConfigSchedule(updated.schedule || '');
+      setConfigMaxExecutionTime(updated.max_execution_time ?? 15);
+      setConfigMaxToolCalls(updated.max_tool_calls ?? 40);
+      setConfigConcurrency(updated.concurrency ?? 1);
+      setConfigRetries(updated.retries ?? 3);
+
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSavedAtTimestamp(timestamp);
+      setSaveStatus('saved');
       setConfigSaveSuccess(true);
-      toast.success('Agent parameters updated in database.', 'Configuration Saved');
-      setTimeout(() => setConfigSaveSuccess(false), 3000);
+      setHeaderUpdatedFlash(true);
+
+      toast.success(`Agent "${updated.name}" parameters saved and persisted.`, 'Agent Details Saved');
+
+      setTimeout(() => {
+        setHeaderUpdatedFlash(false);
+      }, 3500);
+
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setConfigSaveSuccess(false);
+      }, 4000);
     } catch (err: unknown) {
+      setSaveStatus('error');
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to update configuration.';
-      toast.error(detail, 'Update Failed');
+        'Failed to update configuration in database.';
+      toast.error(typeof detail === 'string' ? detail : JSON.stringify(detail), 'Update Failed');
+      setTimeout(() => setSaveStatus('idle'), 3500);
     } finally {
       setIsSavingConfig(false);
     }
@@ -559,6 +667,11 @@ export default function AgentWorkspacePage({
                     {agent.schedule}
                   </span>
                 )}
+                {headerUpdatedFlash && (
+                  <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 animate-pulse flex items-center gap-1 font-semibold">
+                    <Check className="w-3 h-3 stroke-[3]" /> Details Updated Just Now
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 line-clamp-1 max-w-2xl">
                 {agent.description || 'Autonomous agent connected to local runtime.'}
@@ -584,10 +697,9 @@ export default function AgentWorkspacePage({
                 size="sm"
                 onClick={() => {
                   setActiveTab('chat');
-                  if (!prompt.trim()) {
-                    setPrompt('Execute immediate system diagnostic check.');
-                  }
+                  handleSendPrompt();
                 }}
+                disabled={isExecuting}
                 className="gap-2 shadow-lg shadow-emerald-500/10"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
@@ -655,6 +767,19 @@ export default function AgentWorkspacePage({
 
             <button
               type="button"
+              onClick={() => setActiveTab('outputs')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                activeTab === 'outputs'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border border-cyan-300 dark:border-cyan-500/30 font-semibold'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
+              }`}
+            >
+              <FolderDown className="w-3.5 h-3.5" />
+              <span>Outputs ({agentOutputs.length})</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('actions')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 activeTab === 'actions'
@@ -663,7 +788,7 @@ export default function AgentWorkspacePage({
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              <span>Actions & Outputs</span>
+              <span>Action Traces</span>
             </button>
           </div>
 
@@ -721,7 +846,7 @@ export default function AgentWorkspacePage({
                     variant="primary"
                     size="sm"
                     onClick={() => handleSendPrompt()}
-                    disabled={!prompt.trim() || isExecuting}
+                    disabled={isExecuting}
                     className="gap-2 px-5 shadow-lg shadow-cyan-950/30"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
@@ -733,16 +858,29 @@ export default function AgentWorkspacePage({
 
             {/* Prompt input textarea */}
             <form onSubmit={handleSendPrompt} className="space-y-3">
-              <div className="relative">
-                <textarea
-                  rows={3}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={isExecuting}
-                  placeholder="Enter task prompt or instructions for this agent (e.g. 'Check system time and summarize files', or press Ctrl+Enter to run)..."
-                  className="w-full p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans transition-colors resize-none disabled:opacity-50"
-                />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                    <span>Task Prompt</span>
+                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20 font-mono">
+                      Optional
+                    </span>
+                  </label>
+                  <span className="text-[11px] text-zinc-500">
+                    Leave blank to execute using agent instructions
+                  </span>
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={3}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    disabled={isExecuting}
+                    placeholder="Optional: Enter extra task instructions or prompt for this run (or press Ctrl+Enter to execute with default instructions)..."
+                    className="w-full p-4 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 font-sans transition-colors resize-none disabled:opacity-50"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-zinc-500">
@@ -1016,17 +1154,52 @@ export default function AgentWorkspacePage({
         <form onSubmit={handleSaveConfig} className="glass-card p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <div>
-              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Agent Details & Configuration</h2>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                View and edit agent name, description, system instructions, active model, and runtime constraints.
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Settings className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <span>Agent Details & Configuration</span>
+              </h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                View and edit agent designation, mission description, system directives, active model, and safety limits.
               </p>
             </div>
-            {configSaveSuccess && (
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-medium">
-                <Check className="w-4 h-4" /> Agent Details Saved
+            {saveStatus === 'saved' ? (
+              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-bold animate-in fade-in duration-200">
+                <CheckCircle2 className="w-4 h-4 stroke-[2.5]" /> Agent Details Saved
               </span>
-            )}
+            ) : saveStatus === 'saving' ? (
+              <span className="text-xs font-mono text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5 font-medium animate-pulse">
+                <RotateCw className="w-3.5 h-3.5 animate-spin" /> Saving Changes...
+              </span>
+            ) : null}
           </div>
+
+          {/* Prominent Animated Success / Done Action Banner */}
+          {(saveStatus === 'saved' || configSaveSuccess) && (
+            <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-500/40 text-emerald-900 dark:text-emerald-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 text-zinc-950 flex items-center justify-center font-bold shadow-md shadow-emerald-500/30 shrink-0">
+                  <Check className="w-4 h-4 stroke-[3]" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold font-mono flex items-center gap-2">
+                    <span>Agent Details Updated Successfully!</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
+                  </div>
+                  <div className="text-[11px] text-emerald-700 dark:text-emerald-300/80 mt-0.5">
+                    Designation, reasoning directives, active model, and execution parameters were committed to database.
+                  </div>
+                </div>
+              </div>
+              {savedAtTimestamp && (
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 font-semibold block">
+                    {savedAtTimestamp}
+                  </span>
+                  <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-mono">Live Synced</span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
@@ -1038,6 +1211,7 @@ export default function AgentWorkspacePage({
                 required
                 value={configName}
                 onChange={(e) => setConfigName(e.target.value)}
+                placeholder="e.g. Research & Analysis Agent"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
@@ -1050,6 +1224,7 @@ export default function AgentWorkspacePage({
                 type="text"
                 value={configDesc}
                 onChange={(e) => setConfigDesc(e.target.value)}
+                placeholder="Brief summary of what this agent accomplishes"
                 className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
@@ -1066,6 +1241,7 @@ export default function AgentWorkspacePage({
                 required
                 value={configInstructions}
                 onChange={(e) => setConfigInstructions(e.target.value)}
+                placeholder="Core behavioral system prompt for the autonomous model..."
                 className="w-full p-3.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 font-mono leading-relaxed focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-colors"
               />
             </div>
@@ -1079,6 +1255,11 @@ export default function AgentWorkspacePage({
                 onChange={(e) => setConfigModelId(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-cyan-500 font-mono cursor-pointer transition-colors"
               >
+                {!models.some((m) => m.id === configModelId) && agent.model_id && (
+                  <option value={agent.model_id}>
+                    {agent.model || 'Current Model'} (Assigned)
+                  </option>
+                )}
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.quantization || 'GGUF'}) — {m.filename}
@@ -1190,21 +1371,45 @@ export default function AgentWorkspacePage({
             </div>
           </div>
 
-          <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex justify-end">
+          <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-h-[20px]">
+              {saveStatus === 'saved' && (
+                <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold animate-in fade-in duration-150">
+                  <Check className="w-4 h-4 stroke-[3]" /> All changes committed to database successfully at {savedAtTimestamp}
+                </span>
+              )}
+              {saveStatus === 'error' && (
+                <span className="text-xs font-mono text-rose-600 dark:text-rose-400 flex items-center gap-1.5 font-semibold animate-in fade-in duration-150">
+                  <AlertCircle className="w-4 h-4" /> Failed to save agent details. Please check constraints.
+                </span>
+              )}
+            </div>
+
             <Button
-              variant="primary"
-              size="md"
+              type="submit"
+              onClick={handleSaveConfig}
               disabled={isSavingConfig}
-              className="gap-2 shadow-lg shadow-cyan-500/20"
+              variant={saveStatus === 'saved' ? 'emerald' : 'primary'}
+              size="md"
+              className={`gap-2 transition-all duration-300 cursor-pointer ${
+                saveStatus === 'saved'
+                  ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold border-emerald-400 shadow-[0_0_28px_-2px_rgba(16,185,129,0.7)] ring-2 ring-emerald-400/50 scale-[1.02]'
+                  : 'shadow-lg shadow-cyan-500/20'
+              }`}
             >
-              {isSavingConfig ? (
+              {saveStatus === 'saving' ? (
                 <>
-                  <span className="w-3.5 h-3.5 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />
-                  <span>Saving...</span>
+                  <span className="w-4 h-4 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />
+                  <span>Saving Configuration...</span>
+                </>
+              ) : saveStatus === 'saved' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>Saved Successfully!</span>
                 </>
               ) : (
                 <>
-                  <Check className="w-4 h-4" />
+                  <Save className="w-4 h-4" />
                   <span>Save Configuration to Database</span>
                 </>
               )}
@@ -1494,7 +1699,7 @@ export default function AgentWorkspacePage({
                         )}
                       </div>
                       <span className="text-[11px] text-zinc-500 font-mono">
-                        {new Date(act.created_at).toLocaleString()}
+                        {parseUTCDate(act.created_at).toLocaleString()}
                       </span>
                     </div>
 
@@ -1546,6 +1751,163 @@ export default function AgentWorkspacePage({
                         </div>
                       </details>
                     )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 6: OUTPUTS & DELIVERABLES */}
+      {activeTab === 'outputs' && (
+        <div className="p-6 max-w-5xl mx-auto space-y-6 animate-in fade-in duration-150">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+            <div>
+              <h2 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <FolderDown className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                <span>Agent Deliverables & Generated Files</span>
+              </h2>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
+                Output files (PDFs, spreadsheets, data tables, and reports) produced by <strong className="text-zinc-800 dark:text-zinc-200 font-semibold">{agent?.name}</strong> stored in the <code className="text-cyan-700 dark:text-cyan-400 font-mono">agent_outputs</code> table.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={fetchOutputs}
+                disabled={isLoadingOutputs}
+                leftIcon={<RotateCw className={`w-3.5 h-3.5 ${isLoadingOutputs ? 'animate-spin' : ''}`} />}
+              >
+                Refresh
+              </Button>
+              <Link href="/outputs">
+                <Button variant="outline" size="sm" className="gap-1.5 border-zinc-300 dark:border-zinc-700">
+                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>All Outputs Hub</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {isLoadingOutputs ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((k) => (
+                <div key={k} className="p-4 rounded-2xl bg-white/80 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 animate-pulse space-y-2">
+                  <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-1/3" />
+                  <div className="h-8 bg-zinc-100 dark:bg-zinc-800/60 rounded" />
+                </div>
+              ))}
+            </div>
+          ) : agentOutputs.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-white/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800/80 space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center mx-auto border border-cyan-500/20 shadow-[0_0_20px_-5px_rgba(6,182,212,0.3)]">
+                <FolderDown className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+                No deliverables generated yet
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
+                When this agent executes tasks that create output files (like PDF reports, Excel spreadsheets, CSV data, or research deliverables), they will be automatically cataloged here with one-click download.
+              </p>
+              <div className="pt-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setActiveTab('chat')}
+                  className="gap-1.5"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Run Agent Now</span>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {agentOutputs.map((out) => {
+                const isDownloading = downloadingOutputId === out.id;
+                const outputType = (out.output_type || '').toLowerCase();
+                const isPdf = outputType === 'pdf';
+                const isData = ['csv', 'xlsx', 'xls', 'tsv'].includes(outputType);
+                const isDoc = ['docx', 'doc', 'word'].includes(outputType);
+                const isPpt = ['pptx', 'ppt', 'presentation'].includes(outputType);
+                const isJson = ['json', 'xml', 'yaml'].includes(outputType);
+
+                let badgeColor = 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20';
+                let IconComp = FileText;
+
+                if (isPdf) {
+                  badgeColor = 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20';
+                  IconComp = FileText;
+                } else if (isData) {
+                  badgeColor = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+                  IconComp = FileSpreadsheet;
+                } else if (isDoc) {
+                  badgeColor = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+                  IconComp = FileText;
+                } else if (isPpt) {
+                  badgeColor = 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20';
+                  IconComp = Presentation;
+                } else if (isJson) {
+                  badgeColor = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+                  IconComp = FileCode2;
+                }
+
+                const sizeStr = out.file_size
+                  ? out.file_size < 1024 * 1024
+                    ? `${(out.file_size / 1024).toFixed(1)} KB`
+                    : `${(out.file_size / (1024 * 1024)).toFixed(1)} MB`
+                  : '—';
+
+                return (
+                  <div
+                    key={out.id}
+                    className="p-4 rounded-2xl bg-white dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-cyan-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border shadow-xs ${badgeColor}`}>
+                        <IconComp className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm text-zinc-900 dark:text-zinc-100 truncate" title={out.title}>
+                            {out.title}
+                          </span>
+                          <span className={`px-2 py-0.5 text-[10px] font-mono uppercase font-bold rounded-md border ${badgeColor}`}>
+                            {out.output_type}
+                          </span>
+                        </div>
+                        {out.file_path && (
+                          <div className="text-[10px] text-zinc-400 font-mono truncate max-w-md">
+                            {out.file_path.replace(/\\/g, '/')}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-zinc-500 flex items-center gap-2 font-mono">
+                          <span>Size: {sizeStr}</span>
+                          <span>•</span>
+                          <span>{parseUTCDate(out.created_at).toLocaleString()}</span>
+                        </div>
+                        {out.content_preview && (
+                          <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 pt-1 font-mono text-[11px] bg-zinc-50 dark:bg-zinc-950/60 p-2 rounded-lg border border-zinc-100 dark:border-zinc-800/60">
+                            {out.content_preview}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={isDownloading}
+                        onClick={() => handleDownloadOutput(out)}
+                        className="gap-1.5"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${isDownloading ? 'animate-bounce' : ''}`} />
+                        <span>Download</span>
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

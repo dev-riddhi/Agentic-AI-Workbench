@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { agentsApi } from "@/lib/api/agents";
 import { useNotifications } from "@/context/notification-context";
+import { parseUTCDate } from "@/lib/utils/date";
 
 const TITLES: Record<string, { section: string; title: string; subtitle: string }> = {
   "/agents": {
@@ -33,6 +34,11 @@ const TITLES: Record<string, { section: string; title: string; subtitle: string 
     section: "Wizard",
     title: "Provision Agent",
     subtitle: "Configure local model, system instructions, and tool capabilities",
+  },
+  "/outputs": {
+    section: "Artifacts",
+    title: "Agent Execution Outputs",
+    subtitle: "Inspect, preview, and download files and deliverables produced by agents",
   },
   "/documents": {
     section: "Knowledge",
@@ -283,7 +289,7 @@ export function Header() {
                               {n.title}
                             </span>
                             <span className="text-[10px] text-zinc-500 font-mono shrink-0">
-                              {new Date(n.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              {parseUTCDate(n.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                           </div>
                           <p className="text-[11px] leading-relaxed line-clamp-2 text-zinc-300">

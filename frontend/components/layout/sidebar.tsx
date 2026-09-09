@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   MessageSquare,
   Sparkles,
+  FolderDown,
 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 
@@ -26,6 +27,12 @@ export const NAV_ITEMS = [
     href: "/agents",
     icon: Bot,
     description: "Fleet & Reasoning",
+  },
+  {
+    name: "Outputs",
+    href: "/outputs",
+    icon: FolderDown,
+    description: "Artifacts & Downloads",
   },
   {
     name: "Knowledge Vault",

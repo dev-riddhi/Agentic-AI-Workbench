@@ -26,7 +26,7 @@ ACTIVE_DOWNLOADS: dict[str, dict[str, Any]] = {}
 
 
 def make_progress_tracker(model_id_str: str):
-    from tqdm import tqdm
+    from tqdm.auto import tqdm
 
     class DownloadProgressTracker(tqdm):
         def __init__(self, *args, **kwargs):

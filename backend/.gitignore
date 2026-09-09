@@ -10,3 +10,4 @@ database/*.db
 database/*.sqlite
 llama.cpp/
 /alembic/versions/*
+/outputs/*

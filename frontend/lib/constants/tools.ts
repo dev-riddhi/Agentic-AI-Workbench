@@ -3,25 +3,21 @@ import {
   FilePlus,
   FileEdit,
   Trash2,
-  FolderTree,
   Search,
   FileSearch,
-  Archive,
   BookOpen,
-  FileSpreadsheet,
   Globe,
   ExternalLink,
   FileCode2,
   Share2,
   Newspaper,
   Image as ImageIcon,
-  Download,
   Webhook,
-  Terminal,
   Database,
   Mail,
   FolderClosed,
   BellRing,
+  FileDown,
   LucideIcon,
 } from 'lucide-react';
 
@@ -45,15 +41,15 @@ export interface ToolCategoryGroup {
 }
 
 export const WORKBENCH_TOOLS: ToolDefinition[] = [
-  // --- Category: File Operations ---
+  // --- Category: File Operations & CRUD ---
   {
     id: 'read_file',
     name: 'read_file',
-    displayName: 'Read File',
+    displayName: 'Read File (Multi-Format)',
     category: 'files',
-    description: 'Reads text content from a specified file with optional line-range or byte-size slicing.',
+    description: 'Reads and automatically extracts content from PDF, Excel (.xlsx, .xls), CSV, Word (.docx), PowerPoint (.pptx), and text files.',
     riskLevel: 'safe',
-    parametersHint: 'file_path, start_line, end_line, max_bytes',
+    parametersHint: 'file_path, max_rows, max_pages, sheet_name, delimiter, start_line, end_line',
     icon: FileText,
   },
   {
@@ -61,10 +57,20 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'write_create_file',
     displayName: 'Write / Create File',
     category: 'files',
-    description: 'Creates a new file or overwrites an existing file with provided text content.',
+    description: 'Creates or overwrites files inside the outputs folder and registers them in agent outputs.',
     riskLevel: 'medium',
-    parametersHint: 'file_path, content, overwrite',
+    parametersHint: 'file_path, content, mode, overwrite',
     icon: FilePlus,
+  },
+  {
+    id: 'create_pdf_from_markdown',
+    name: 'create_pdf_from_markdown',
+    displayName: 'Create PDF from Markdown',
+    category: 'documents',
+    description: 'Generates a styled, publication-ready PDF deliverable from markdown text and saves it into the outputs directory.',
+    riskLevel: 'safe',
+    parametersHint: 'file_path, markdown_content, title, page_size, theme_color',
+    icon: FileDown,
   },
   {
     id: 'edit_file',
@@ -73,7 +79,7 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     category: 'files',
     description: 'Performs precise find-and-replace text modifications within an existing file.',
     riskLevel: 'medium',
-    parametersHint: 'file_path, target_text, replacement_text',
+    parametersHint: 'file_path, target_content, replacement_content, is_regex',
     icon: FileEdit,
   },
   {
@@ -81,20 +87,10 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'delete_rename_file',
     displayName: 'Delete / Rename File',
     category: 'files',
-    description: 'Safely removes or renames local files and directories within allowed workspace paths.',
+    description: 'Safely removes or renames local files within allowed workspace paths.',
     riskLevel: 'restricted',
-    parametersHint: 'file_path, action, new_name',
+    parametersHint: 'source_path, action, target_path',
     icon: Trash2,
-  },
-  {
-    id: 'list_directory',
-    name: 'list_directory',
-    displayName: 'List Directory',
-    category: 'files',
-    description: 'Recursively lists directory contents, file sizes, and subfolder structures.',
-    riskLevel: 'safe',
-    parametersHint: 'dir_path, recursive, max_depth',
-    icon: FolderTree,
   },
   {
     id: 'search_files',
@@ -103,7 +99,7 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     category: 'files',
     description: 'Searches for files matching wildcard patterns or containing specific keywords.',
     riskLevel: 'safe',
-    parametersHint: 'query, search_dir, regex, file_pattern',
+    parametersHint: 'query, directory_path, file_pattern, is_regex',
     icon: Search,
   },
   {
@@ -111,53 +107,21 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'get_file_metadata',
     displayName: 'File Metadata',
     category: 'files',
-    description: 'Retrieves POSIX/Windows file stats, modification timestamps, and permissions.',
+    description: 'Retrieves file stats, modification timestamps, mime type, and SHA-256 hash.',
     riskLevel: 'safe',
-    parametersHint: 'file_path',
+    parametersHint: 'file_path, compute_hash',
     icon: FileSearch,
   },
-  {
-    id: 'compress_extract_zip',
-    name: 'compress_extract_zip',
-    displayName: 'ZIP Archive Handler',
-    category: 'files',
-    description: 'Compresses file lists into ZIP archives or decompresses archives into targets.',
-    riskLevel: 'medium',
-    parametersHint: 'action, zip_path, destination, file_list',
-    icon: Archive,
-  },
 
-  // --- Category: Documents & Structured Knowledge ---
-  {
-    id: 'parse_pdf',
-    name: 'parse_pdf',
-    displayName: 'Parse PDF Documents',
-    category: 'documents',
-    description: 'Extracts formatted text, table structures, and page metadata from PDF manuals.',
-    riskLevel: 'safe',
-    parametersHint: 'file_path, start_page, end_page, extract_tables',
-    icon: BookOpen,
-  },
-  {
-    id: 'read_write_csv_excel_json_xml',
-    name: 'read_write_csv_excel_json_xml',
-    displayName: 'Structured Data Handler',
-    category: 'documents',
-    description: 'Bi-directional read/write for CSV, XLSX, JSON, and XML structured data.',
-    riskLevel: 'safe',
-    parametersHint: 'file_path, format, action, data',
-    icon: FileSpreadsheet,
-  },
-
-  // --- Category: Web & External Network (Air-Gapped Proxy) ---
+  // --- Category: Web & External Network ---
   {
     id: 'web_search',
     name: 'web_search',
-    displayName: 'Web / Intranet Search',
+    displayName: 'Web Search',
     category: 'web',
-    description: 'Queries search index or air-gapped intranet mirror for query matches.',
+    description: 'Performs web searches via public endpoints with zero API keys required.',
     riskLevel: 'safe',
-    parametersHint: 'query, max_results, filter_domain',
+    parametersHint: 'query, max_results, safe_search',
     icon: Globe,
   },
   {
@@ -165,7 +129,7 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'fetch_webpage',
     displayName: 'Fetch Webpage HTML',
     category: 'web',
-    description: 'Fetches raw HTTP/HTTPS HTML response from allowed domain whitelist.',
+    description: 'Fetches raw HTTP/HTTPS HTML response with SSRF protection.',
     riskLevel: 'medium',
     parametersHint: 'url, headers, timeout',
     icon: ExternalLink,
@@ -177,7 +141,7 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     category: 'web',
     description: 'Extracts cleaned text, reader mode markdown, and metadata from web content.',
     riskLevel: 'safe',
-    parametersHint: 'url, output_format',
+    parametersHint: 'url, output_format, include_links',
     icon: FileCode2,
   },
   {
@@ -187,7 +151,7 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     category: 'web',
     description: 'Discovers and maps hyperlinks within web pages for crawling and navigation.',
     riskLevel: 'safe',
-    parametersHint: 'url, depth, same_domain_only',
+    parametersHint: 'url, filter_pattern, max_links',
     icon: Share2,
   },
   {
@@ -195,9 +159,9 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'search_news',
     displayName: 'Search News & Bulletins',
     category: 'web',
-    description: 'Searches industry advisories, RSS feeds, and technical news releases.',
+    description: 'Searches recent news articles and RSS feeds via DuckDuckGo news endpoints.',
     riskLevel: 'safe',
-    parametersHint: 'topic, date_range, language',
+    parametersHint: 'query, max_results, region',
     icon: Newspaper,
   },
   {
@@ -205,20 +169,10 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'search_images',
     displayName: 'Search Image References',
     category: 'web',
-    description: 'Discovers schematic diagrams and technical image assets from catalog.',
+    description: 'Discovers image URLs, thumbnails, and dimensions via DuckDuckGo image search.',
     riskLevel: 'safe',
-    parametersHint: 'keywords, max_items',
+    parametersHint: 'query, max_results, safesearch',
     icon: ImageIcon,
-  },
-  {
-    id: 'download_files',
-    name: 'download_files',
-    displayName: 'Download Files',
-    category: 'web',
-    description: 'Streams files from HTTP endpoints directly into designated workspace folders.',
-    riskLevel: 'restricted',
-    parametersHint: 'url, destination_path, verify_checksum',
-    icon: Download,
   },
 
   // --- Category: Code & API Execution ---
@@ -227,21 +181,10 @@ export const WORKBENCH_TOOLS: ToolDefinition[] = [
     name: 'query_apis',
     displayName: 'REST API Query',
     category: 'code',
-    description: 'Dispatches structured REST requests (GET, POST, PUT, DELETE) with payload control.',
+    description: 'Dispatches structured REST requests (GET, POST, PUT, DELETE, PATCH) with payload control.',
     riskLevel: 'medium',
-    parametersHint: 'endpoint, method, payload, auth_header',
+    parametersHint: 'url, method, json_data, headers, params',
     icon: Webhook,
-  },
-  {
-    id: 'python_execution',
-    name: 'python_execution',
-    displayName: 'Isolated Python Execution',
-    category: 'code',
-    description: 'Executes analytical scripts, calculations, and pandas routines in a sandboxed subprocess.',
-    riskLevel: 'restricted',
-    requiresSandboxing: true,
-    parametersHint: 'code, timeout_seconds, pass_variables',
-    icon: Terminal,
   },
 
   // --- Category: Legacy / Convenience Aliases ---
@@ -291,25 +234,25 @@ export const TOOL_CATEGORIES: ToolCategoryGroup[] = [
   {
     id: 'files',
     title: 'File System Operations',
-    description: 'Local workspace file I/O, directory browsing, searching, and archives',
+    description: 'Multi-format file reading, outputs generation, editing, and searching',
     tools: WORKBENCH_TOOLS.filter((t) => t.category === 'files'),
   },
   {
     id: 'documents',
-    title: 'Documents & Structured Data',
-    description: 'PDF parsing, Excel/CSV table processing, and JSON/XML transformers',
+    title: 'Documents & Deliverables',
+    description: 'PDF report generation from markdown and document synthesis',
     tools: WORKBENCH_TOOLS.filter((t) => t.category === 'documents'),
   },
   {
     id: 'web',
     title: 'Web & Network Access',
-    description: 'Air-gapped proxy web search, link scraping, downloads, and bulletins',
+    description: 'Air-gapped proxy web search, link scraping, news, and image discovery',
     tools: WORKBENCH_TOOLS.filter((t) => t.category === 'web'),
   },
   {
     id: 'code',
-    title: 'Code Execution & APIs',
-    description: 'Sandboxed Python runner and loopback REST API dispatchers',
+    title: 'API Execution',
+    description: 'Loopback REST API dispatchers and HTTP operations',
     tools: WORKBENCH_TOOLS.filter((t) => t.category === 'code'),
   },
   {
@@ -330,7 +273,7 @@ Your mission is to:
 1. Ingest telemetry logs, sensor values, and maintenance PDF manuals.
 2. Cross-reference operating pressure, temperature, and vibration with normal tolerances.
 3. Diagnose root cause failures and output step-by-step mechanical remediation procedures with ISO compliance references.`,
-    recommendedTools: ['parse_pdf', 'read_file', 'read_write_csv_excel_json_xml', 'python_execution'],
+    recommendedTools: ['read_file', 'write_create_file', 'create_pdf_from_markdown', 'search_files'],
   },
   {
     id: 'document-auditor',
@@ -341,18 +284,18 @@ Your responsibility:
 1. Deep-scan uploaded technical specifications, blueprints, and PDF regulatory documents.
 2. Extract tabular figures, safety constraints, and chemical thresholds.
 3. Flag discrepancies, deviations from standards, and generate structured executive audit reports.`,
-    recommendedTools: ['parse_pdf', 'read_write_csv_excel_json_xml', 'search_files', 'read_file'],
+    recommendedTools: ['read_file', 'create_pdf_from_markdown', 'search_files', 'write_create_file'],
   },
   {
     id: 'code-analyst',
-    title: 'Air-Gapped Python Analyst',
-    description: 'Execute isolated mathematical models, verify checksums, and aggregate metrics.',
-    prompt: `You are an Air-Gapped Code and Analytical Automation Agent.
+    title: 'Air-Gapped Data Analyst',
+    description: 'Analyze tabular datasets, verify metrics, and produce publication-ready PDF reports.',
+    prompt: `You are an Air-Gapped Data Automation & Reporting Agent.
 Your tasks:
-1. Read tabular data and configuration files from the local workspace.
-2. Execute deterministic Python routines in an isolated environment to compute metrics.
-3. Output validated analytical summaries without external network dependencies.`,
-    recommendedTools: ['python_execution', 'read_file', 'write_create_file', 'list_directory'],
+1. Read tabular data, spreadsheets, and configuration files from the local workspace.
+2. Synthesize key trends, anomalies, and statistical conclusions.
+3. Compile a styled, executive PDF report deliverable using create_pdf_from_markdown.`,
+    recommendedTools: ['read_file', 'write_create_file', 'create_pdf_from_markdown', 'search_files'],
   },
   {
     id: 'intranet-researcher',

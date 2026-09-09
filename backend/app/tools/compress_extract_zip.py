@@ -8,7 +8,7 @@ from typing import Any
 import zipfile
 
 
-from app.tools.file_security import resolve_safe_path
+from app.tools.file.file_security import resolve_safe_path
 
 
 def compress_extract_zip(
@@ -34,7 +34,7 @@ def compress_extract_zip(
         return {
             "success": False,
             "error": str(err),
-            "archive_path": str(zip_path),
+            "archive_path": zip_path,
         }
 
     act = action.strip().lower()

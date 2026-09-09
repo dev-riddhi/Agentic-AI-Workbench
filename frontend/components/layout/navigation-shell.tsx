@@ -9,6 +9,7 @@ import LoginPage from "@/app/auth/login/page";
 
 const KNOWN_PROTECTED_PREFIXES = [
   "/agents",
+  "/outputs",
   "/documents",
   "/models",
   "/chat",

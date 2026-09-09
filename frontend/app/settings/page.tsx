@@ -19,6 +19,7 @@ import { usersApi } from '@/lib/api/users';
 import { settingsApi } from '@/lib/api/settings';
 import { useToast } from '@/context/toast-context';
 import { Badge } from '@/components/ui/badge';
+import { parseUTCDate } from '@/lib/utils/date';
 
 type SettingsTab = 'system' | 'profile' | 'users';
 
@@ -628,7 +629,7 @@ export default function SettingsPage() {
                       <td className="py-2.5 px-3 font-medium text-zinc-900 dark:text-zinc-200">{u.name}</td>
                       <td className="py-2.5 px-3 font-mono text-zinc-600 dark:text-zinc-400">{u.email}</td>
                       <td className="py-2.5 px-3 font-mono text-zinc-500 dark:text-zinc-400 text-[11px]">
-                        {new Date(u.created_at).toLocaleDateString()}
+                        {parseUTCDate(u.created_at).toLocaleDateString()}
                       </td>
                       <td className="py-2.5 px-3 text-right">
                         {u.email !== 'admin@example.com' && (

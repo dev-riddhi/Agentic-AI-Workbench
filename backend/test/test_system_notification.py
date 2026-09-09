@@ -6,8 +6,11 @@ import time
 from uuid import uuid4
 from datetime import datetime, timezone
 
+from pathlib import Path
+
 # Ensure backend root is on sys.path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+backend_dir = Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name == "test" else Path(__file__).resolve().parent
+sys.path.insert(0, str(backend_dir))
 
 from app.tools import TOOLS, TOOLS_MAP, get_tool, run_tool, system_notification
 from app.features.notifications.manager import notification_manager

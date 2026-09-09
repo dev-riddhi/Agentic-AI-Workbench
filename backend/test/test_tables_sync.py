@@ -8,8 +8,11 @@ import sys
 import time
 from uuid import uuid4
 
+from pathlib import Path
+
 # Ensure backend root is on sys.path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+backend_dir = Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name == "test" else Path(__file__).resolve().parent
+sys.path.insert(0, str(backend_dir))
 
 from database.database import SessionLocal, init_db
 from database.models import Agent, AIModel, Notification, AgentAction, User
@@ -21,7 +24,7 @@ from app.tools import system_notification
 def test_tables_exist():
     print("\n[STEP 1] Verifying SQLite Table Schema Existence...")
     init_db()
-    conn = sqlite3.connect("database/app.db")
+    conn = sqlite3.connect(str(backend_dir / "database" / "app.db"))
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     conn.close()
 

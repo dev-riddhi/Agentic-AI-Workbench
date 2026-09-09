@@ -5,27 +5,34 @@ mapping tool names to callable execution functions.
 
 from typing import Any, Callable
 
-from app.tools.read_file import read_file
-from app.tools.write_create_file import write_create_file
-from app.tools.edit_file import edit_file
-from app.tools.delete_rename_file import delete_rename_file
-from app.tools.list_directory import list_directory
-from app.tools.search_files import search_files
-from app.tools.get_file_metadata import get_file_metadata
-from app.tools.parse_pdf import parse_pdf
-from app.tools.read_write_csv_excel_json_xml import read_write_csv_excel_json_xml
-from app.tools.compress_extract_zip import compress_extract_zip
+from app.tools.file.read_file import read_file
+from app.tools.file.create_file import create_file, write_create_file
+from app.tools.utils.create_pdf_from_markdown import create_pdf_from_markdown
+from app.tools.utils.create_csv import create_csv
+from app.tools.utils.create_excel import create_excel
+from app.tools.utils.create_docx import create_docx
+from app.tools.utils.create_pptx import create_pptx
+from app.tools.file.edit_file import edit_file
+from app.tools.file.delete_rename_file import delete_rename_file
+from app.tools.file.search_files import search_files
+from app.tools.file.get_file_metadata import get_file_metadata
 from app.tools.web_search import web_search
 from app.tools.fetch_webpage import fetch_webpage
 from app.tools.extract_webpage_content import extract_webpage_content
 from app.tools.browse_links import browse_links
 from app.tools.search_news import search_news
 from app.tools.search_images import search_images
-from app.tools.download_files import download_files
-from app.tools.file_security import get_upload_dir, resolve_safe_path
 from app.tools.query_apis import query_apis
-from app.tools.python_execution import python_execution
 from app.tools.system_notification import system_notification
+from app.tools.file.file_security import get_upload_dir, get_outputs_dir, resolve_safe_path, resolve_output_path
+
+# Retain backward-compatible module-level imports for standalone scripts / tests
+from app.tools.file.list_directory import list_directory
+from app.tools.file.parse_pdf import parse_pdf
+from app.tools.file.read_write_csv_excel_json_xml import read_write_csv_excel_json_xml
+from app.tools.compress_extract_zip import compress_extract_zip
+from app.tools.download_files import download_files
+from app.tools.python_execution import python_execution
 
 
 class ToolFunctionDict(dict):
@@ -39,7 +46,7 @@ class ToolFunctionDict(dict):
         return self.fn(*args, **kwargs)
 
 
-# Static list of tools following the standard tool calling dictionary style
+# Static list of active tools following the standard tool calling dictionary style
 # Each dict maps tool_name -> function, type -> "function", and function -> ToolFunctionDict
 TOOLS: list[dict[str, Any]] = [
     {
@@ -48,88 +55,247 @@ TOOLS: list[dict[str, Any]] = [
         "name": "read_file",
         "callable": read_file,
         "handler": read_file,
-        "description": 'Reads text content from a specified file with optional line-range or byte-size slicing.',
-        "parameters": {   'properties': {   'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'end_line': {   'description': 'Optional 1-based ending line number '
-                                                                 '(inclusive).',
-                                                  'type': 'integer'},
-                                  'file_path': {   'description': 'Absolute or relative path to the file.',
-                                                   'type': 'string'},
-                                  'max_bytes': {   'description': 'Optional maximum bytes to read.',
-                                                   'type': 'integer'},
-                                  'start_line': {   'description': 'Optional 1-based starting line number '
-                                                                   '(inclusive).',
-                                                    'type': 'integer'}},
-                'required': ['file_path'],
-                'type': 'object'},
+        "description": "Reads and automatically extracts content from any file inside the uploads directory. Automatically detects rich formats (PDF, Excel, CSV, Word, PowerPoint) and text files.",
+        "parameters": {
+            "properties": {
+                "file_path": {
+                    "description": "Path or filename inside uploads (e.g. 'data.xlsx', 'report.pdf', 'summary.txt', 'outputs/final.pdf').",
+                    "type": "string",
+                },
+                "encoding": {
+                    "default": "utf-8",
+                    "description": "File character encoding for text files.",
+                    "type": "string",
+                },
+                "start_line": {
+                    "description": "Optional 1-based start line index for text files.",
+                    "type": "integer",
+                },
+                "end_line": {
+                    "description": "Optional 1-based end line index for text files.",
+                    "type": "integer",
+                },
+                "max_bytes": {
+                    "description": "Optional limit on the number of bytes to read for text files.",
+                    "type": "integer",
+                },
+                "max_rows": {
+                    "description": "Optional maximum rows to extract from Excel or CSV files.",
+                    "type": "integer",
+                },
+                "max_pages": {
+                    "description": "Optional maximum pages to extract from PDF files.",
+                    "type": "integer",
+                },
+                "sheet_name": {
+                    "description": "Optional sheet name to extract from Excel workbooks.",
+                    "type": "string",
+                },
+                "delimiter": {
+                    "description": "Optional custom delimiter for CSV/TSV files (e.g. ',', '\\t', ';').",
+                    "type": "string",
+                },
+            },
+            "required": ["file_path"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             read_file,
             name="read_file",
-            description='Reads text content from a specified file with optional line-range or byte-size slicing.',
-            parameters={   'properties': {   'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'end_line': {   'description': 'Optional 1-based ending line number '
-                                                                 '(inclusive).',
-                                                  'type': 'integer'},
-                                  'file_path': {   'description': 'Absolute or relative path to the file.',
-                                                   'type': 'string'},
-                                  'max_bytes': {   'description': 'Optional maximum bytes to read.',
-                                                   'type': 'integer'},
-                                  'start_line': {   'description': 'Optional 1-based starting line number '
-                                                                   '(inclusive).',
-                                                    'type': 'integer'}},
-                'required': ['file_path'],
-                'type': 'object'},
+            description="Reads and automatically extracts content from any file inside the uploads directory. Automatically detects rich formats (PDF, Excel, CSV, Word, PowerPoint) and text files.",
+            parameters={
+                "properties": {
+                    "file_path": {
+                        "description": "Path or filename inside uploads (e.g. 'data.xlsx', 'report.pdf', 'summary.txt', 'outputs/final.pdf').",
+                        "type": "string",
+                    },
+                    "encoding": {
+                        "default": "utf-8",
+                        "description": "File character encoding for text files.",
+                        "type": "string",
+                    },
+                    "start_line": {
+                        "description": "Optional 1-based start line index for text files.",
+                        "type": "integer",
+                    },
+                    "end_line": {
+                        "description": "Optional 1-based end line index for text files.",
+                        "type": "integer",
+                    },
+                    "max_bytes": {
+                        "description": "Optional limit on the number of bytes to read for text files.",
+                        "type": "integer",
+                    },
+                    "max_rows": {
+                        "description": "Optional maximum rows to extract from Excel or CSV files.",
+                        "type": "integer",
+                    },
+                    "max_pages": {
+                        "description": "Optional maximum pages to extract from PDF files.",
+                        "type": "integer",
+                    },
+                    "sheet_name": {
+                        "description": "Optional sheet name to extract from Excel workbooks.",
+                        "type": "string",
+                    },
+                    "delimiter": {
+                        "description": "Optional custom delimiter for CSV/TSV files (e.g. ',', '\\t', ';').",
+                        "type": "string",
+                    },
+                },
+                "required": ["file_path"],
+                "type": "object",
+            },
         ),
     },
     {
         "type": "function",
-        "write_create_file": write_create_file,
-        "name": "write_create_file",
-        "callable": write_create_file,
-        "handler": write_create_file,
-        "description": 'Creates a new file or overwrites/appends to an existing file, creating parent directories.',
-        "parameters": {   'properties': {   'content': {   'description': 'Text content to write into the file.',
-                                                 'type': 'string'},
-                                  'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'file_path': {'description': 'Destination file path.', 'type': 'string'},
-                                  'mode': {   'default': 'w',
-                                              'description': "Write mode: 'w' for overwrite/create, 'a' for "
-                                                             'append.',
-                                              'enum': ['w', 'a'],
-                                              'type': 'string'},
-                                  'overwrite': {   'default': True,
-                                                   'description': 'Whether to allow overwriting if the file '
-                                                                  'already exists.',
-                                                   'type': 'boolean'}},
-                'required': ['file_path', 'content'],
-                'type': 'object'},
+        "create_file": create_file,
+        "name": "create_file",
+        "callable": create_file,
+        "handler": create_file,
+        "description": "Creates output files strictly inside the backend/outputs directory and registers them in the agent_outputs database. Automatically generates the native format requested: Excel (.xlsx), PDF (.pdf), Word (.docx), PowerPoint (.pptx), CSV (.csv), or Markdown (.md).",
+        "parameters": {
+            "properties": {
+                "file_path": {
+                    "description": "Destination filename with extension inside backend/outputs/ (e.g. 'sales_data.xlsx', 'report.pdf', 'document.docx', 'presentation.pptx', 'data.csv', 'notes.md').",
+                    "type": "string",
+                },
+                "content": {
+                    "description": "Text, markdown, or tabular content. For PDF/Word/Markdown: full markdown text. For Excel/CSV: CSV or tabular markdown. For PowerPoint: markdown with '# Slide Title' for each slide and bullet points.",
+                    "type": "string",
+                },
+                "file_type": {
+                    "description": "Exact file format to generate: 'xlsx' (Excel spreadsheet), 'pdf' (PDF document), 'docx' (Word document), 'pptx' (PowerPoint presentation), 'csv' (CSV data), or 'md' (Markdown text). If an unsupported format is provided, creates a .md file.",
+                    "type": "string",
+                },
+                "title": {
+                    "description": "Optional human-readable title for the deliverable (e.g. 'Q3 Financial Report').",
+                    "type": "string",
+                },
+                "mode": {
+                    "default": "w",
+                    "description": "Write mode: 'w' for overwrite/create, 'a' for append.",
+                    "enum": ["w", "a"],
+                    "type": "string",
+                },
+                "overwrite": {
+                    "default": True,
+                    "description": "Whether to allow overwriting if the file already exists.",
+                    "type": "boolean",
+                },
+            },
+            "required": ["file_path", "content"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
-            write_create_file,
-            name="write_create_file",
-            description='Creates a new file or overwrites/appends to an existing file, creating parent directories.',
-            parameters={   'properties': {   'content': {   'description': 'Text content to write into the file.',
-                                                 'type': 'string'},
-                                  'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'file_path': {'description': 'Destination file path.', 'type': 'string'},
-                                  'mode': {   'default': 'w',
-                                              'description': "Write mode: 'w' for overwrite/create, 'a' for "
-                                                             'append.',
-                                              'enum': ['w', 'a'],
-                                              'type': 'string'},
-                                  'overwrite': {   'default': True,
-                                                   'description': 'Whether to allow overwriting if the file '
-                                                                  'already exists.',
-                                                   'type': 'boolean'}},
-                'required': ['file_path', 'content'],
-                'type': 'object'},
+            create_file,
+            name="create_file",
+            description="Creates output files strictly inside the backend/outputs directory and registers them in the agent_outputs database. Automatically generates the native format requested: Excel (.xlsx), PDF (.pdf), Word (.docx), PowerPoint (.pptx), CSV (.csv), or Markdown (.md).",
+            parameters={
+                "properties": {
+                    "file_path": {
+                        "description": "Destination filename with extension inside backend/outputs/ (e.g. 'sales_data.xlsx', 'report.pdf', 'document.docx', 'presentation.pptx', 'data.csv', 'notes.md').",
+                        "type": "string",
+                    },
+                    "content": {
+                        "description": "Text, markdown, or tabular content. For PDF/Word/Markdown: full markdown text. For Excel/CSV: CSV or tabular markdown. For PowerPoint: markdown with '# Slide Title' for each slide and bullet points.",
+                        "type": "string",
+                    },
+                    "file_type": {
+                        "description": "Exact file format to generate: 'xlsx' (Excel spreadsheet), 'pdf' (PDF document), 'docx' (Word document), 'pptx' (PowerPoint presentation), 'csv' (CSV data), or 'md' (Markdown text). If an unsupported format is provided, creates a .md file.",
+                        "type": "string",
+                    },
+                    "title": {
+                        "description": "Optional human-readable title for the deliverable (e.g. 'Q3 Financial Report').",
+                        "type": "string",
+                    },
+                    "mode": {
+                        "default": "w",
+                        "description": "Write mode: 'w' for overwrite/create, 'a' for append.",
+                        "enum": ["w", "a"],
+                        "type": "string",
+                    },
+                    "overwrite": {
+                        "default": True,
+                        "description": "Whether to allow overwriting if the file already exists.",
+                        "type": "boolean",
+                    },
+                },
+                "required": ["file_path", "content"],
+                "type": "object",
+            },
+        ),
+    },
+    {
+        "type": "function",
+        "create_pdf_from_markdown": create_pdf_from_markdown,
+        "name": "create_pdf_from_markdown",
+        "callable": create_pdf_from_markdown,
+        "handler": create_pdf_from_markdown,
+        "description": "Generates a styled, publication-ready PDF deliverable from LLM markdown content (supporting headings, tables, code blocks, lists, blockquotes) and saves it in outputs/, registering it in the agent_outputs database.",
+        "parameters": {
+            "properties": {
+                "file_path": {
+                    "description": "Output filename or relative path inside outputs (e.g. 'quarterly_report.pdf').",
+                    "type": "string",
+                },
+                "markdown_content": {
+                    "description": "Markdown text generated by the agent to convert into a styled PDF document.",
+                    "type": "string",
+                },
+                "title": {
+                    "description": "Optional document title displayed on header / cover.",
+                    "type": "string",
+                },
+                "page_size": {
+                    "default": "LETTER",
+                    "description": "Page size: 'LETTER' or 'A4'.",
+                    "enum": ["LETTER", "A4"],
+                    "type": "string",
+                },
+                "theme_color": {
+                    "default": "#1e40af",
+                    "description": "Primary hex color for headings and table accents (default: '#1e40af').",
+                    "type": "string",
+                },
+            },
+            "required": ["file_path", "markdown_content"],
+            "type": "object",
+        },
+        "function": ToolFunctionDict(
+            create_pdf_from_markdown,
+            name="create_pdf_from_markdown",
+            description="Generates a styled, publication-ready PDF deliverable from LLM markdown content (supporting headings, tables, code blocks, lists, blockquotes) and saves it in outputs/, registering it in the agent_outputs database.",
+            parameters={
+                "properties": {
+                    "file_path": {
+                        "description": "Output filename or relative path inside outputs (e.g. 'quarterly_report.pdf').",
+                        "type": "string",
+                    },
+                    "markdown_content": {
+                        "description": "Markdown text generated by the agent to convert into a styled PDF document.",
+                        "type": "string",
+                    },
+                    "title": {
+                        "description": "Optional document title displayed on header / cover.",
+                        "type": "string",
+                    },
+                    "page_size": {
+                        "default": "LETTER",
+                        "description": "Page size: 'LETTER' or 'A4'.",
+                        "enum": ["LETTER", "A4"],
+                        "type": "string",
+                    },
+                    "theme_color": {
+                        "default": "#1e40af",
+                        "description": "Primary hex color for headings and table accents (default: '#1e40af').",
+                        "type": "string",
+                    },
+                },
+                "required": ["file_path", "markdown_content"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -138,49 +304,77 @@ TOOLS: list[dict[str, Any]] = [
         "name": "edit_file",
         "callable": edit_file,
         "handler": edit_file,
-        "description": 'Performs targeted find-and-replace or regex editing within an existing file.',
-        "parameters": {   'properties': {   'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'file_path': {'description': 'Path to the file to edit.', 'type': 'string'},
-                                  'is_regex': {   'default': False,
-                                                  'description': 'Whether target_content is a regular '
-                                                                 'expression.',
-                                                  'type': 'boolean'},
-                                  'replace_all': {   'default': False,
-                                                     'description': 'If True, replaces all occurrences; '
-                                                                    'otherwise replaces first.',
-                                                     'type': 'boolean'},
-                                  'replacement_content': {   'description': 'New content to replace the target '
-                                                                            'with.',
-                                                             'type': 'string'},
-                                  'target_content': {   'description': 'Text or regex pattern to search for.',
-                                                        'type': 'string'}},
-                'required': ['file_path', 'target_content', 'replacement_content'],
-                'type': 'object'},
+        "description": "Performs find-and-replace or targeted substring edits within an existing file.",
+        "parameters": {
+            "properties": {
+                "encoding": {
+                    "default": "utf-8",
+                    "description": "File character encoding.",
+                    "type": "string",
+                },
+                "file_path": {
+                    "description": "Path to the file to edit.",
+                    "type": "string",
+                },
+                "is_regex": {
+                    "default": False,
+                    "description": "Whether target_content is a regular expression pattern.",
+                    "type": "boolean",
+                },
+                "replace_all": {
+                    "default": False,
+                    "description": "Whether to replace all occurrences or only the first.",
+                    "type": "boolean",
+                },
+                "replacement_content": {
+                    "description": "Replacement string.",
+                    "type": "string",
+                },
+                "target_content": {
+                    "description": "Text or regex pattern to search for.",
+                    "type": "string",
+                },
+            },
+            "required": ["file_path", "target_content", "replacement_content"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             edit_file,
             name="edit_file",
-            description='Performs targeted find-and-replace or regex editing within an existing file.',
-            parameters={   'properties': {   'encoding': {   'default': 'utf-8',
-                                                  'description': 'File character encoding.',
-                                                  'type': 'string'},
-                                  'file_path': {'description': 'Path to the file to edit.', 'type': 'string'},
-                                  'is_regex': {   'default': False,
-                                                  'description': 'Whether target_content is a regular '
-                                                                 'expression.',
-                                                  'type': 'boolean'},
-                                  'replace_all': {   'default': False,
-                                                     'description': 'If True, replaces all occurrences; '
-                                                                    'otherwise replaces first.',
-                                                     'type': 'boolean'},
-                                  'replacement_content': {   'description': 'New content to replace the target '
-                                                                            'with.',
-                                                             'type': 'string'},
-                                  'target_content': {   'description': 'Text or regex pattern to search for.',
-                                                        'type': 'string'}},
-                'required': ['file_path', 'target_content', 'replacement_content'],
-                'type': 'object'},
+            description="Performs find-and-replace or targeted substring edits strictly within files inside the backend/outputs directory.",
+            parameters={
+                "properties": {
+                    "encoding": {
+                        "default": "utf-8",
+                        "description": "File character encoding.",
+                        "type": "string",
+                    },
+                    "file_path": {
+                        "description": "Path to the file to edit inside backend/outputs/.",
+                        "type": "string",
+                    },
+                    "is_regex": {
+                        "default": False,
+                        "description": "Whether target_content is a regular expression pattern.",
+                        "type": "boolean",
+                    },
+                    "replace_all": {
+                        "default": False,
+                        "description": "Whether to replace all occurrences or only the first.",
+                        "type": "boolean",
+                    },
+                    "replacement_content": {
+                        "description": "Replacement string.",
+                        "type": "string",
+                    },
+                    "target_content": {
+                        "description": "Text or regex pattern to search for.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file_path", "target_content", "replacement_content"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -189,86 +383,59 @@ TOOLS: list[dict[str, Any]] = [
         "name": "delete_rename_file",
         "callable": delete_rename_file,
         "handler": delete_rename_file,
-        "description": 'Safely deletes or renames/moves files and directories.',
-        "parameters": {   'properties': {   'action': {   'description': "Action to perform: 'delete' or 'rename'.",
-                                                'enum': ['delete', 'rename', 'move'],
-                                                'type': 'string'},
-                                  'recursive': {   'default': False,
-                                                   'description': 'Allow recursive deletion of non-empty '
-                                                                  'directories.',
-                                                   'type': 'boolean'},
-                                  'source_path': {   'description': 'Source file or directory path.',
-                                                     'type': 'string'},
-                                  'target_path': {   'description': 'Target destination path (required for '
-                                                                    "'rename').",
-                                                     'type': 'string'}},
-                'required': ['action', 'source_path'],
-                'type': 'object'},
+        "description": "Safely deletes or renames/moves files and directories strictly inside the backend/outputs directory.",
+        "parameters": {
+            "properties": {
+                "action": {
+                    "description": "Action to perform: 'delete' or 'rename'.",
+                    "enum": ["delete", "rename", "move"],
+                    "type": "string",
+                },
+                "recursive": {
+                    "default": False,
+                    "description": "Allow recursive deletion of non-empty directories.",
+                    "type": "boolean",
+                },
+                "source_path": {
+                    "description": "Source file or directory path inside backend/outputs/.",
+                    "type": "string",
+                },
+                "target_path": {
+                    "description": "Target destination path inside backend/outputs/ (required for 'rename').",
+                    "type": "string",
+                },
+            },
+            "required": ["action", "source_path"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             delete_rename_file,
             name="delete_rename_file",
-            description='Safely deletes or renames/moves files and directories.',
-            parameters={   'properties': {   'action': {   'description': "Action to perform: 'delete' or 'rename'.",
-                                                'enum': ['delete', 'rename', 'move'],
-                                                'type': 'string'},
-                                  'recursive': {   'default': False,
-                                                   'description': 'Allow recursive deletion of non-empty '
-                                                                  'directories.',
-                                                   'type': 'boolean'},
-                                  'source_path': {   'description': 'Source file or directory path.',
-                                                     'type': 'string'},
-                                  'target_path': {   'description': 'Target destination path (required for '
-                                                                    "'rename').",
-                                                     'type': 'string'}},
-                'required': ['action', 'source_path'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "list_directory": list_directory,
-        "name": "list_directory",
-        "callable": list_directory,
-        "handler": list_directory,
-        "description": 'Lists contents of a directory with file sizes, timestamps, and optional recursion.',
-        "parameters": {   'properties': {   'directory_path': {   'default': '.',
-                                                        'description': 'Directory path to inspect.',
-                                                        'type': 'string'},
-                                  'include_hidden': {   'default': False,
-                                                        'description': 'Whether to include hidden files '
-                                                                       "starting with '.'.",
-                                                        'type': 'boolean'},
-                                  'max_depth': {   'default': 1,
-                                                   'description': 'Maximum directory recursion depth.',
-                                                   'type': 'integer'},
-                                  'pattern': {   'description': 'Optional wildcard pattern filter (e.g. '
-                                                                "'*.py').",
-                                                 'type': 'string'},
-                                  'recursive': {   'default': False,
-                                                   'description': 'Whether to list subdirectories recursively.',
-                                                   'type': 'boolean'}},
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            list_directory,
-            name="list_directory",
-            description='Lists contents of a directory with file sizes, timestamps, and optional recursion.',
-            parameters={   'properties': {   'directory_path': {   'default': '.',
-                                                        'description': 'Directory path to inspect.',
-                                                        'type': 'string'},
-                                  'include_hidden': {   'default': False,
-                                                        'description': 'Whether to include hidden files '
-                                                                       "starting with '.'.",
-                                                        'type': 'boolean'},
-                                  'max_depth': {   'default': 1,
-                                                   'description': 'Maximum directory recursion depth.',
-                                                   'type': 'integer'},
-                                  'pattern': {   'description': 'Optional wildcard pattern filter (e.g. '
-                                                                "'*.py').",
-                                                 'type': 'string'},
-                                  'recursive': {   'default': False,
-                                                   'description': 'Whether to list subdirectories recursively.',
-                                                   'type': 'boolean'}},
-                'type': 'object'},
+            description="Safely deletes or renames/moves files and directories strictly inside the backend/outputs directory.",
+            parameters={
+                "properties": {
+                    "action": {
+                        "description": "Action to perform: 'delete' or 'rename'.",
+                        "enum": ["delete", "rename", "move"],
+                        "type": "string",
+                    },
+                    "recursive": {
+                        "default": False,
+                        "description": "Allow recursive deletion of non-empty directories.",
+                        "type": "boolean",
+                    },
+                    "source_path": {
+                        "description": "Source file or directory path.",
+                        "type": "string",
+                    },
+                    "target_path": {
+                        "description": "Target destination path (required for 'rename').",
+                        "type": "string",
+                    },
+                },
+                "required": ["action", "source_path"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -277,53 +444,79 @@ TOOLS: list[dict[str, Any]] = [
         "name": "search_files",
         "callable": search_files,
         "handler": search_files,
-        "description": 'Finds files matching glob patterns or searches inside file contents for text/regex.',
-        "parameters": {   'properties': {   'case_sensitive': {   'default': False,
-                                                        'description': 'Whether search is case-sensitive.',
-                                                        'type': 'boolean'},
-                                  'directory_path': {   'default': '.',
-                                                        'description': 'Base directory to start searching '
-                                                                       'from.',
-                                                        'type': 'string'},
-                                  'file_pattern': {   'default': '*',
-                                                      'description': "Filename glob pattern (e.g. '*.json', "
-                                                                     "'*config*').",
-                                                      'type': 'string'},
-                                  'is_regex': {   'default': False,
-                                                  'description': 'Whether query is a regular expression.',
-                                                  'type': 'boolean'},
-                                  'max_results': {   'default': 50,
-                                                     'description': 'Maximum number of matches to return.',
-                                                     'type': 'integer'},
-                                  'query': {   'description': 'Optional text or regex pattern to search for '
-                                                              'inside file contents.',
-                                               'type': 'string'}},
-                'type': 'object'},
+        "description": "Finds files matching glob patterns or searches inside file contents for text/regex.",
+        "parameters": {
+            "properties": {
+                "case_sensitive": {
+                    "default": False,
+                    "description": "Whether search is case-sensitive.",
+                    "type": "boolean",
+                },
+                "directory_path": {
+                    "default": ".",
+                    "description": "Base directory to start searching from.",
+                    "type": "string",
+                },
+                "file_pattern": {
+                    "default": "*",
+                    "description": "Filename glob pattern (e.g. '*.json', '*config*').",
+                    "type": "string",
+                },
+                "is_regex": {
+                    "default": False,
+                    "description": "Whether query is a regular expression.",
+                    "type": "boolean",
+                },
+                "max_results": {
+                    "default": 50,
+                    "description": "Maximum number of matches to return.",
+                    "type": "integer",
+                },
+                "query": {
+                    "description": "Optional text or regex pattern to search for inside file contents.",
+                    "type": "string",
+                },
+            },
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             search_files,
             name="search_files",
-            description='Finds files matching glob patterns or searches inside file contents for text/regex.',
-            parameters={   'properties': {   'case_sensitive': {   'default': False,
-                                                        'description': 'Whether search is case-sensitive.',
-                                                        'type': 'boolean'},
-                                  'directory_path': {   'default': '.',
-                                                        'description': 'Base directory to start searching '
-                                                                       'from.',
-                                                        'type': 'string'},
-                                  'file_pattern': {   'default': '*',
-                                                      'description': "Filename glob pattern (e.g. '*.json', "
-                                                                     "'*config*').",
-                                                      'type': 'string'},
-                                  'is_regex': {   'default': False,
-                                                  'description': 'Whether query is a regular expression.',
-                                                  'type': 'boolean'},
-                                  'max_results': {   'default': 50,
-                                                     'description': 'Maximum number of matches to return.',
-                                                     'type': 'integer'},
-                                  'query': {   'description': 'Optional text or regex pattern to search for '
-                                                              'inside file contents.',
-                                               'type': 'string'}},
-                'type': 'object'},
+            description="Finds files matching glob patterns or searches inside file contents for text/regex.",
+            parameters={
+                "properties": {
+                    "case_sensitive": {
+                        "default": False,
+                        "description": "Whether search is case-sensitive.",
+                        "type": "boolean",
+                    },
+                    "directory_path": {
+                        "default": ".",
+                        "description": "Base directory to start searching from.",
+                        "type": "string",
+                    },
+                    "file_pattern": {
+                        "default": "*",
+                        "description": "Filename glob pattern (e.g. '*.json', '*config*').",
+                        "type": "string",
+                    },
+                    "is_regex": {
+                        "default": False,
+                        "description": "Whether query is a regular expression.",
+                        "type": "boolean",
+                    },
+                    "max_results": {
+                        "default": 50,
+                        "description": "Maximum number of matches to return.",
+                        "type": "integer",
+                    },
+                    "query": {
+                        "description": "Optional text or regex pattern to search for inside file contents.",
+                        "type": "string",
+                    },
+                },
+                "type": "object",
+            },
         ),
     },
     {
@@ -332,152 +525,41 @@ TOOLS: list[dict[str, Any]] = [
         "name": "get_file_metadata",
         "callable": get_file_metadata,
         "handler": get_file_metadata,
-        "description": 'Extracts file metadata including size, mime type, created/modified dates, and SHA-256 hash.',
-        "parameters": {   'properties': {   'compute_checksum': {   'default': True,
-                                                          'description': 'Compute SHA-256 hash for files.',
-                                                          'type': 'boolean'},
-                                  'file_path': {   'description': 'Target file or directory path.',
-                                                   'type': 'string'}},
-                'required': ['file_path'],
-                'type': 'object'},
+        "description": "Extracts file metadata including size, mime type, created/modified dates, and SHA-256 hash.",
+        "parameters": {
+            "properties": {
+                "compute_hash": {
+                    "default": True,
+                    "description": "Whether to compute SHA-256 checksum.",
+                    "type": "boolean",
+                },
+                "file_path": {
+                    "description": "Target file or directory path.",
+                    "type": "string",
+                },
+            },
+            "required": ["file_path"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             get_file_metadata,
             name="get_file_metadata",
-            description='Extracts file metadata including size, mime type, created/modified dates, and SHA-256 hash.',
-            parameters={   'properties': {   'compute_checksum': {   'default': True,
-                                                          'description': 'Compute SHA-256 hash for files.',
-                                                          'type': 'boolean'},
-                                  'file_path': {   'description': 'Target file or directory path.',
-                                                   'type': 'string'}},
-                'required': ['file_path'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "parse_pdf": parse_pdf,
-        "name": "parse_pdf",
-        "callable": parse_pdf,
-        "handler": parse_pdf,
-        "description": 'Extracts text content, page count, and metadata from PDF files using pypdf.',
-        "parameters": {   'properties': {   'extract_metadata': {   'default': True,
-                                                          'description': 'Whether to extract author, title, '
-                                                                         'and creation metadata.',
-                                                          'type': 'boolean'},
-                                  'file_path': {'description': 'Path to the PDF file.', 'type': 'string'},
-                                  'max_pages': {   'description': 'Maximum number of pages to parse.',
-                                                   'type': 'integer'},
-                                  'pages': {   'description': 'Optional list of 1-based page numbers to '
-                                                              'extract (e.g. [1, 3]).',
-                                               'items': {'type': 'integer'},
-                                               'type': 'array'}},
-                'required': ['file_path'],
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            parse_pdf,
-            name="parse_pdf",
-            description='Extracts text content, page count, and metadata from PDF files using pypdf.',
-            parameters={   'properties': {   'extract_metadata': {   'default': True,
-                                                          'description': 'Whether to extract author, title, '
-                                                                         'and creation metadata.',
-                                                          'type': 'boolean'},
-                                  'file_path': {'description': 'Path to the PDF file.', 'type': 'string'},
-                                  'max_pages': {   'description': 'Maximum number of pages to parse.',
-                                                   'type': 'integer'},
-                                  'pages': {   'description': 'Optional list of 1-based page numbers to '
-                                                              'extract (e.g. [1, 3]).',
-                                               'items': {'type': 'integer'},
-                                               'type': 'array'}},
-                'required': ['file_path'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "read_write_csv_excel_json_xml": read_write_csv_excel_json_xml,
-        "name": "read_write_csv_excel_json_xml",
-        "callable": read_write_csv_excel_json_xml,
-        "handler": read_write_csv_excel_json_xml,
-        "description": 'Reads or writes structured datasets in CSV, Excel (.xlsx), JSON, and XML formats.',
-        "parameters": {   'properties': {   'action': {   'description': "Action to perform: 'read' or 'write'.",
-                                                'enum': ['read', 'write'],
-                                                'type': 'string'},
-                                  'data': {   'description': 'Data payload to write (list of dicts, dict, or '
-                                                             'nested structure).'},
-                                  'file_path': {'description': 'Path to the target file.', 'type': 'string'},
-                                  'format': {   'description': 'Format override (auto-inferred from extension '
-                                                               'if omitted).',
-                                                'enum': ['csv', 'excel', 'json', 'xml'],
-                                                'type': 'string'},
-                                  'root_tag': {   'default': 'root',
-                                                  'description': 'Root element tag name for XML writes.',
-                                                  'type': 'string'},
-                                  'sheet_name': {   'description': 'Optional sheet name for Excel operations.',
-                                                    'type': 'string'}},
-                'required': ['action', 'file_path'],
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            read_write_csv_excel_json_xml,
-            name="read_write_csv_excel_json_xml",
-            description='Reads or writes structured datasets in CSV, Excel (.xlsx), JSON, and XML formats.',
-            parameters={   'properties': {   'action': {   'description': "Action to perform: 'read' or 'write'.",
-                                                'enum': ['read', 'write'],
-                                                'type': 'string'},
-                                  'data': {   'description': 'Data payload to write (list of dicts, dict, or '
-                                                             'nested structure).'},
-                                  'file_path': {'description': 'Path to the target file.', 'type': 'string'},
-                                  'format': {   'description': 'Format override (auto-inferred from extension '
-                                                               'if omitted).',
-                                                'enum': ['csv', 'excel', 'json', 'xml'],
-                                                'type': 'string'},
-                                  'root_tag': {   'default': 'root',
-                                                  'description': 'Root element tag name for XML writes.',
-                                                  'type': 'string'},
-                                  'sheet_name': {   'description': 'Optional sheet name for Excel operations.',
-                                                    'type': 'string'}},
-                'required': ['action', 'file_path'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "compress_extract_zip": compress_extract_zip,
-        "name": "compress_extract_zip",
-        "callable": compress_extract_zip,
-        "handler": compress_extract_zip,
-        "description": 'Creates ZIP archives or extracts archives with Zip Slip path-traversal prevention.',
-        "parameters": {   'properties': {   'action': {   'description': "Action to perform: 'compress', 'extract', or "
-                                                               "'list'.",
-                                                'enum': ['compress', 'extract', 'list'],
-                                                'type': 'string'},
-                                  'destination_path': {   'description': 'Directory to extract files into.',
-                                                          'type': 'string'},
-                                  'source_paths': {   'description': 'List of files or directories to include '
-                                                                     'when compressing.',
-                                                      'items': {'type': 'string'},
-                                                      'type': 'array'},
-                                  'zip_path': {   'description': 'Path to the target or source .zip file.',
-                                                  'type': 'string'}},
-                'required': ['action', 'zip_path'],
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            compress_extract_zip,
-            name="compress_extract_zip",
-            description='Creates ZIP archives or extracts archives with Zip Slip path-traversal prevention.',
-            parameters={   'properties': {   'action': {   'description': "Action to perform: 'compress', 'extract', or "
-                                                               "'list'.",
-                                                'enum': ['compress', 'extract', 'list'],
-                                                'type': 'string'},
-                                  'destination_path': {   'description': 'Directory to extract files into.',
-                                                          'type': 'string'},
-                                  'source_paths': {   'description': 'List of files or directories to include '
-                                                                     'when compressing.',
-                                                      'items': {'type': 'string'},
-                                                      'type': 'array'},
-                                  'zip_path': {   'description': 'Path to the target or source .zip file.',
-                                                  'type': 'string'}},
-                'required': ['action', 'zip_path'],
-                'type': 'object'},
+            description="Extracts file metadata including size, mime type, created/modified dates, and SHA-256 hash.",
+            parameters={
+                "properties": {
+                    "compute_hash": {
+                        "default": True,
+                        "description": "Whether to compute SHA-256 checksum.",
+                        "type": "boolean",
+                    },
+                    "file_path": {
+                        "description": "Target file or directory path.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file_path"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -486,29 +568,63 @@ TOOLS: list[dict[str, Any]] = [
         "name": "web_search",
         "callable": web_search,
         "handler": web_search,
-        "description": 'Performs web searches via public DuckDuckGo endpoints with zero API keys required.',
-        "parameters": {   'properties': {   'max_results': {   'default': 8,
-                                                     'description': 'Maximum number of results to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'Web search query string.', 'type': 'string'},
-                                  'region': {   'default': 'us-en',
-                                                'description': 'Search region code.',
-                                                'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
+        "description": "Performs web searches via public DuckDuckGo endpoints with zero API keys required.",
+        "parameters": {
+            "properties": {
+                "max_results": {
+                    "default": 8,
+                    "description": "Maximum search results to return.",
+                    "type": "integer",
+                },
+                "query": {
+                    "description": "Search query string.",
+                    "type": "string",
+                },
+                "region": {
+                    "default": "wt-wt",
+                    "description": "Search region code.",
+                    "type": "string",
+                },
+                "safe_search": {
+                    "default": "moderate",
+                    "description": "Safe search filtering level.",
+                    "enum": ["strict", "moderate", "off"],
+                    "type": "string",
+                },
+            },
+            "required": ["query"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             web_search,
             name="web_search",
-            description='Performs web searches via public DuckDuckGo endpoints with zero API keys required.',
-            parameters={   'properties': {   'max_results': {   'default': 8,
-                                                     'description': 'Maximum number of results to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'Web search query string.', 'type': 'string'},
-                                  'region': {   'default': 'us-en',
-                                                'description': 'Search region code.',
-                                                'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
+            description="Performs web searches via public DuckDuckGo endpoints with zero API keys required.",
+            parameters={
+                "properties": {
+                    "max_results": {
+                        "default": 8,
+                        "description": "Maximum search results to return.",
+                        "type": "integer",
+                    },
+                    "query": {
+                        "description": "Search query string.",
+                        "type": "string",
+                    },
+                    "region": {
+                        "default": "wt-wt",
+                        "description": "Search region code.",
+                        "type": "string",
+                    },
+                    "safe_search": {
+                        "default": "moderate",
+                        "description": "Safe search filtering level.",
+                        "enum": ["strict", "moderate", "off"],
+                        "type": "string",
+                    },
+                },
+                "required": ["query"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -517,33 +633,59 @@ TOOLS: list[dict[str, Any]] = [
         "name": "fetch_webpage",
         "callable": fetch_webpage,
         "handler": fetch_webpage,
-        "description": 'Downloads raw content from a webpage URL with headers and timeout support.',
-        "parameters": {   'properties': {   'headers': {   'description': 'Optional HTTP request headers.',
-                                                 'type': 'object'},
-                                  'max_bytes': {   'default': 2097152,
-                                                   'description': 'Maximum bytes to return.',
-                                                   'type': 'integer'},
-                                  'timeout': {   'default': 15.0,
-                                                 'description': 'Request timeout in seconds.',
-                                                 'type': 'number'},
-                                  'url': {'description': 'Webpage URL to fetch.', 'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
+        "description": "Fetches raw HTML and HTTP status/headers from a specified URL with SSRF protection.",
+        "parameters": {
+            "properties": {
+                "headers": {
+                    "description": "Optional custom HTTP headers dict.",
+                    "type": "object",
+                },
+                "max_bytes": {
+                    "default": 1048576,
+                    "description": "Maximum response payload bytes to read.",
+                    "type": "integer",
+                },
+                "timeout": {
+                    "default": 15.0,
+                    "description": "HTTP request timeout in seconds.",
+                    "type": "number",
+                },
+                "url": {
+                    "description": "HTTP or HTTPS URL to fetch.",
+                    "type": "string",
+                },
+            },
+            "required": ["url"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             fetch_webpage,
             name="fetch_webpage",
-            description='Downloads raw content from a webpage URL with headers and timeout support.',
-            parameters={   'properties': {   'headers': {   'description': 'Optional HTTP request headers.',
-                                                 'type': 'object'},
-                                  'max_bytes': {   'default': 2097152,
-                                                   'description': 'Maximum bytes to return.',
-                                                   'type': 'integer'},
-                                  'timeout': {   'default': 15.0,
-                                                 'description': 'Request timeout in seconds.',
-                                                 'type': 'number'},
-                                  'url': {'description': 'Webpage URL to fetch.', 'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
+            description="Fetches raw HTML and HTTP status/headers from a specified URL with SSRF protection.",
+            parameters={
+                "properties": {
+                    "headers": {
+                        "description": "Optional custom HTTP headers dict.",
+                        "type": "object",
+                    },
+                    "max_bytes": {
+                        "default": 1048576,
+                        "description": "Maximum response payload bytes to read.",
+                        "type": "integer",
+                    },
+                    "timeout": {
+                        "default": 15.0,
+                        "description": "HTTP request timeout in seconds.",
+                        "type": "number",
+                    },
+                    "url": {
+                        "description": "HTTP or HTTPS URL to fetch.",
+                        "type": "string",
+                    },
+                },
+                "required": ["url"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -552,25 +694,53 @@ TOOLS: list[dict[str, Any]] = [
         "name": "extract_webpage_content",
         "callable": extract_webpage_content,
         "handler": extract_webpage_content,
-        "description": 'Cleans and extracts readable article text, title, headings, and metadata from HTML.',
-        "parameters": {   'properties': {   'html': {   'description': 'Raw HTML string (used if url is not provided).',
-                                              'type': 'string'},
-                                  'max_chars': {   'default': 25000,
-                                                   'description': 'Maximum characters of text to return.',
-                                                   'type': 'integer'},
-                                  'url': {'description': 'Webpage URL to fetch and clean.', 'type': 'string'}},
-                'type': 'object'},
+        "description": "Extracts clean readable article text, markdown, headings, and links from a webpage.",
+        "parameters": {
+            "properties": {
+                "include_links": {
+                    "default": True,
+                    "description": "Whether to extract structured hyperlinks.",
+                    "type": "boolean",
+                },
+                "output_format": {
+                    "default": "markdown",
+                    "description": "Extracted text format: 'markdown' or 'text'.",
+                    "enum": ["markdown", "text"],
+                    "type": "string",
+                },
+                "url": {
+                    "description": "Target webpage URL to scrape and parse.",
+                    "type": "string",
+                },
+            },
+            "required": ["url"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             extract_webpage_content,
             name="extract_webpage_content",
-            description='Cleans and extracts readable article text, title, headings, and metadata from HTML.',
-            parameters={   'properties': {   'html': {   'description': 'Raw HTML string (used if url is not provided).',
-                                              'type': 'string'},
-                                  'max_chars': {   'default': 25000,
-                                                   'description': 'Maximum characters of text to return.',
-                                                   'type': 'integer'},
-                                  'url': {'description': 'Webpage URL to fetch and clean.', 'type': 'string'}},
-                'type': 'object'},
+            description="Extracts clean readable article text, markdown, headings, and links from a webpage.",
+            parameters={
+                "properties": {
+                    "include_links": {
+                        "default": True,
+                        "description": "Whether to extract structured hyperlinks.",
+                        "type": "boolean",
+                    },
+                    "output_format": {
+                        "default": "markdown",
+                        "description": "Extracted text format: 'markdown' or 'text'.",
+                        "enum": ["markdown", "text"],
+                        "type": "string",
+                    },
+                    "url": {
+                        "description": "Target webpage URL to scrape and parse.",
+                        "type": "string",
+                    },
+                },
+                "required": ["url"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -579,33 +749,59 @@ TOOLS: list[dict[str, Any]] = [
         "name": "browse_links",
         "callable": browse_links,
         "handler": browse_links,
-        "description": 'Discovers and normalizes all hyperlinks on a webpage, categorizing internal vs external.',
-        "parameters": {   'properties': {   'max_links': {   'default': 50,
-                                                   'description': 'Maximum number of links to return.',
-                                                   'type': 'integer'},
-                                  'same_domain_only': {   'default': False,
-                                                          'description': 'If True, only return links on the '
-                                                                         'same domain.',
-                                                          'type': 'boolean'},
-                                  'url': {   'description': 'Webpage URL to scrape links from.',
-                                             'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
+        "description": "Extracts and categorizes all internal and external hyperlinks from a given webpage.",
+        "parameters": {
+            "properties": {
+                "filter_pattern": {
+                    "description": "Optional substring or regex to filter link URLs/text.",
+                    "type": "string",
+                },
+                "max_links": {
+                    "default": 100,
+                    "description": "Maximum number of links to return.",
+                    "type": "integer",
+                },
+                "same_domain_only": {
+                    "default": False,
+                    "description": "Only return links belonging to the same host domain.",
+                    "type": "boolean",
+                },
+                "url": {
+                    "description": "Target webpage URL to inspect.",
+                    "type": "string",
+                },
+            },
+            "required": ["url"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             browse_links,
             name="browse_links",
-            description='Discovers and normalizes all hyperlinks on a webpage, categorizing internal vs external.',
-            parameters={   'properties': {   'max_links': {   'default': 50,
-                                                   'description': 'Maximum number of links to return.',
-                                                   'type': 'integer'},
-                                  'same_domain_only': {   'default': False,
-                                                          'description': 'If True, only return links on the '
-                                                                         'same domain.',
-                                                          'type': 'boolean'},
-                                  'url': {   'description': 'Webpage URL to scrape links from.',
-                                             'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
+            description="Extracts and categorizes all internal and external hyperlinks from a given webpage.",
+            parameters={
+                "properties": {
+                    "filter_pattern": {
+                        "description": "Optional substring or regex to filter link URLs/text.",
+                        "type": "string",
+                    },
+                    "max_links": {
+                        "default": 100,
+                        "description": "Maximum number of links to return.",
+                        "type": "integer",
+                    },
+                    "same_domain_only": {
+                        "default": False,
+                        "description": "Only return links belonging to the same host domain.",
+                        "type": "boolean",
+                    },
+                    "url": {
+                        "description": "Target webpage URL to inspect.",
+                        "type": "string",
+                    },
+                },
+                "required": ["url"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -614,23 +810,51 @@ TOOLS: list[dict[str, Any]] = [
         "name": "search_news",
         "callable": search_news,
         "handler": search_news,
-        "description": 'Searches recent news headlines and articles via public news RSS feeds.',
-        "parameters": {   'properties': {   'max_results': {   'default': 10,
-                                                     'description': 'Maximum number of news items to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'News topic or query string.', 'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
+        "description": "Searches recent news articles and RSS feeds via DuckDuckGo news endpoints.",
+        "parameters": {
+            "properties": {
+                "max_results": {
+                    "default": 10,
+                    "description": "Maximum news articles to return.",
+                    "type": "integer",
+                },
+                "query": {
+                    "description": "News search query keywords.",
+                    "type": "string",
+                },
+                "region": {
+                    "default": "wt-wt",
+                    "description": "Search region code.",
+                    "type": "string",
+                },
+            },
+            "required": ["query"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             search_news,
             name="search_news",
-            description='Searches recent news headlines and articles via public news RSS feeds.',
-            parameters={   'properties': {   'max_results': {   'default': 10,
-                                                     'description': 'Maximum number of news items to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'News topic or query string.', 'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
+            description="Searches recent news articles and RSS feeds via DuckDuckGo news endpoints.",
+            parameters={
+                "properties": {
+                    "max_results": {
+                        "default": 10,
+                        "description": "Maximum news articles to return.",
+                        "type": "integer",
+                    },
+                    "query": {
+                        "description": "News search query keywords.",
+                        "type": "string",
+                    },
+                    "region": {
+                        "default": "wt-wt",
+                        "description": "Search region code.",
+                        "type": "string",
+                    },
+                },
+                "required": ["query"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -639,58 +863,53 @@ TOOLS: list[dict[str, Any]] = [
         "name": "search_images",
         "callable": search_images,
         "handler": search_images,
-        "description": 'Searches for online images, returning image URLs, thumbnails, and dimensions.',
-        "parameters": {   'properties': {   'max_results': {   'default': 10,
-                                                     'description': 'Maximum number of images to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'Image search query string.', 'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
+        "description": "Discovers image URLs, thumbnails, and dimensions via DuckDuckGo image search.",
+        "parameters": {
+            "properties": {
+                "max_results": {
+                    "default": 10,
+                    "description": "Maximum image items to return.",
+                    "type": "integer",
+                },
+                "query": {
+                    "description": "Image search query.",
+                    "type": "string",
+                },
+                "safesearch": {
+                    "default": "moderate",
+                    "description": "SafeSearch level: 'off', 'moderate', or 'strict'.",
+                    "enum": ["off", "moderate", "strict"],
+                    "type": "string",
+                },
+            },
+            "required": ["query"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             search_images,
             name="search_images",
-            description='Searches for online images, returning image URLs, thumbnails, and dimensions.',
-            parameters={   'properties': {   'max_results': {   'default': 10,
-                                                     'description': 'Maximum number of images to return.',
-                                                     'type': 'integer'},
-                                  'query': {'description': 'Image search query string.', 'type': 'string'}},
-                'required': ['query'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "download_files": download_files,
-        "name": "download_files",
-        "callable": download_files,
-        "handler": download_files,
-        "description": 'Streams and downloads remote files to disk with SHA-256 validation.',
-        "parameters": {   'properties': {   'destination_path': {   'description': 'Local destination path on disk.',
-                                                          'type': 'string'},
-                                  'expected_sha256': {   'description': 'Optional SHA-256 checksum to verify '
-                                                                        'file integrity.',
-                                                         'type': 'string'},
-                                  'overwrite': {   'default': True,
-                                                   'description': 'Whether to overwrite existing local files.',
-                                                   'type': 'boolean'},
-                                  'url': {'description': 'Direct file download URL.', 'type': 'string'}},
-                'required': ['url', 'destination_path'],
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            download_files,
-            name="download_files",
-            description='Streams and downloads remote files to disk with SHA-256 validation.',
-            parameters={   'properties': {   'destination_path': {   'description': 'Local destination path on disk.',
-                                                          'type': 'string'},
-                                  'expected_sha256': {   'description': 'Optional SHA-256 checksum to verify '
-                                                                        'file integrity.',
-                                                         'type': 'string'},
-                                  'overwrite': {   'default': True,
-                                                   'description': 'Whether to overwrite existing local files.',
-                                                   'type': 'boolean'},
-                                  'url': {'description': 'Direct file download URL.', 'type': 'string'}},
-                'required': ['url', 'destination_path'],
-                'type': 'object'},
+            description="Discovers image URLs, thumbnails, and dimensions via DuckDuckGo image search.",
+            parameters={
+                "properties": {
+                    "max_results": {
+                        "default": 10,
+                        "description": "Maximum image items to return.",
+                        "type": "integer",
+                    },
+                    "query": {
+                        "description": "Image search query.",
+                        "type": "string",
+                    },
+                    "safesearch": {
+                        "default": "moderate",
+                        "description": "SafeSearch level: 'off', 'moderate', or 'strict'.",
+                        "enum": ["off", "moderate", "strict"],
+                        "type": "string",
+                    },
+                },
+                "required": ["query"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -699,70 +918,75 @@ TOOLS: list[dict[str, Any]] = [
         "name": "query_apis",
         "callable": query_apis,
         "handler": query_apis,
-        "description": 'Dispatches arbitrary HTTP REST API requests (GET, POST, PUT, DELETE, PATCH) with JSON.',
-        "parameters": {   'properties': {   'headers': {   'description': 'Optional HTTP request headers.',
-                                                 'type': 'object'},
-                                  'json_data': {'description': 'Optional JSON serializable body payload.'},
-                                  'method': {   'default': 'GET',
-                                                'description': 'HTTP method to execute.',
-                                                'enum': ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-                                                'type': 'string'},
-                                  'params': {'description': 'Optional query parameters.', 'type': 'object'},
-                                  'timeout': {   'default': 30.0,
-                                                 'description': 'Request timeout in seconds.',
-                                                 'type': 'number'},
-                                  'url': {'description': 'Full REST API endpoint URL.', 'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
+        "description": "Dispatches arbitrary HTTP REST API requests (GET, POST, PUT, DELETE, PATCH) with JSON.",
+        "parameters": {
+            "properties": {
+                "headers": {
+                    "description": "Optional HTTP request headers.",
+                    "type": "object",
+                },
+                "json_data": {
+                    "description": "Optional JSON serializable body payload.",
+                },
+                "method": {
+                    "default": "GET",
+                    "description": "HTTP method to execute.",
+                    "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                    "type": "string",
+                },
+                "params": {
+                    "description": "Optional query parameters.",
+                    "type": "object",
+                },
+                "timeout": {
+                    "default": 30.0,
+                    "description": "Request timeout in seconds.",
+                    "type": "number",
+                },
+                "url": {
+                    "description": "Full REST API endpoint URL.",
+                    "type": "string",
+                },
+            },
+            "required": ["url"],
+            "type": "object",
+        },
         "function": ToolFunctionDict(
             query_apis,
             name="query_apis",
-            description='Dispatches arbitrary HTTP REST API requests (GET, POST, PUT, DELETE, PATCH) with JSON.',
-            parameters={   'properties': {   'headers': {   'description': 'Optional HTTP request headers.',
-                                                 'type': 'object'},
-                                  'json_data': {'description': 'Optional JSON serializable body payload.'},
-                                  'method': {   'default': 'GET',
-                                                'description': 'HTTP method to execute.',
-                                                'enum': ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-                                                'type': 'string'},
-                                  'params': {'description': 'Optional query parameters.', 'type': 'object'},
-                                  'timeout': {   'default': 30.0,
-                                                 'description': 'Request timeout in seconds.',
-                                                 'type': 'number'},
-                                  'url': {'description': 'Full REST API endpoint URL.', 'type': 'string'}},
-                'required': ['url'],
-                'type': 'object'},
-        ),
-    },
-    {
-        "type": "function",
-        "python_execution": python_execution,
-        "name": "python_execution",
-        "callable": python_execution,
-        "handler": python_execution,
-        "description": 'Executes Python code in an isolated subprocess with timeout, capturing stdout/stderr/exit code.',
-        "parameters": {   'properties': {   'code': {   'description': 'Python source code string to execute.',
-                                              'type': 'string'},
-                                  'timeout_seconds': {   'default': 30,
-                                                         'description': 'Maximum execution time in seconds.',
-                                                         'type': 'integer'},
-                                  'working_directory': {   'description': 'Optional working directory path.',
-                                                           'type': 'string'}},
-                'required': ['code'],
-                'type': 'object'},
-        "function": ToolFunctionDict(
-            python_execution,
-            name="python_execution",
-            description='Executes Python code in an isolated subprocess with timeout, capturing stdout/stderr/exit code.',
-            parameters={   'properties': {   'code': {   'description': 'Python source code string to execute.',
-                                              'type': 'string'},
-                                  'timeout_seconds': {   'default': 30,
-                                                         'description': 'Maximum execution time in seconds.',
-                                                         'type': 'integer'},
-                                  'working_directory': {   'description': 'Optional working directory path.',
-                                                           'type': 'string'}},
-                'required': ['code'],
-                'type': 'object'},
+            description="Dispatches arbitrary HTTP REST API requests (GET, POST, PUT, DELETE, PATCH) with JSON.",
+            parameters={
+                "properties": {
+                    "headers": {
+                        "description": "Optional HTTP request headers.",
+                        "type": "object",
+                    },
+                    "json_data": {
+                        "description": "Optional JSON serializable body payload.",
+                    },
+                    "method": {
+                        "default": "GET",
+                        "description": "HTTP method to execute.",
+                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
+                        "type": "string",
+                    },
+                    "params": {
+                        "description": "Optional query parameters.",
+                        "type": "object",
+                    },
+                    "timeout": {
+                        "default": 30.0,
+                        "description": "Request timeout in seconds.",
+                        "type": "number",
+                    },
+                    "url": {
+                        "description": "Full REST API endpoint URL.",
+                        "type": "string",
+                    },
+                },
+                "required": ["url"],
+                "type": "object",
+            },
         ),
     },
     {
@@ -831,24 +1055,19 @@ TOOLS: list[dict[str, Any]] = [
 # Static list of dicts where key is tool name and value is the callable function
 TOOLS_NAME: list[dict[str, Callable[..., dict[str, Any]]]] = [
     {"read_file": read_file},
-    {"write_create_file": write_create_file},
+    {"create_file": create_file},
+    {"create_pdf_from_markdown": create_pdf_from_markdown},
     {"edit_file": edit_file},
     {"delete_rename_file": delete_rename_file},
-    {"list_directory": list_directory},
     {"search_files": search_files},
     {"get_file_metadata": get_file_metadata},
-    {"parse_pdf": parse_pdf},
-    {"read_write_csv_excel_json_xml": read_write_csv_excel_json_xml},
-    {"compress_extract_zip": compress_extract_zip},
     {"web_search": web_search},
     {"fetch_webpage": fetch_webpage},
     {"extract_webpage_content": extract_webpage_content},
     {"browse_links": browse_links},
     {"search_news": search_news},
     {"search_images": search_images},
-    {"download_files": download_files},
     {"query_apis": query_apis},
-    {"python_execution": python_execution},
     {"system_notification": system_notification},
 ]
 
@@ -866,6 +1085,9 @@ TOOL_DESCRIPTIONS: dict[str, str] = {t["name"]: t["description"] for t in TOOLS}
 TOOLS_MAP: dict[str, Callable[..., dict[str, Any]]] = {
     t["name"]: t["callable"] for t in TOOLS
 }
+# Direct alias for create_file
+TOOLS_MAP["create_file"] = create_file
+
 
 # Standard OpenAI / llama-server tool definitions list (pure JSON serializable)
 OPENAI_TOOLS: list[dict[str, Any]] = [
@@ -883,6 +1105,8 @@ OPENAI_TOOLS: list[dict[str, Any]] = [
 
 def get_tool(name: str) -> Callable[..., dict[str, Any]] | None:
     """Retrieves the executable callable function for a named tool."""
+    if name in ("create_file", "write_create_file"):
+        return create_file
     return TOOLS_MAP.get(name)
 
 
@@ -910,25 +1134,30 @@ __all__ = [
     "get_tool",
     "run_tool",
     "read_file",
+    "create_file",
     "write_create_file",
+    "create_pdf_from_markdown",
     "edit_file",
     "delete_rename_file",
-    "list_directory",
     "search_files",
     "get_file_metadata",
-    "parse_pdf",
-    "read_write_csv_excel_json_xml",
-    "compress_extract_zip",
     "web_search",
     "fetch_webpage",
     "extract_webpage_content",
     "browse_links",
     "search_news",
     "search_images",
-    "download_files",
     "query_apis",
-    "python_execution",
     "system_notification",
     "get_upload_dir",
+    "get_outputs_dir",
     "resolve_safe_path",
+    "resolve_output_path",
+    # Legacy imports for backward compatibility
+    "list_directory",
+    "parse_pdf",
+    "read_write_csv_excel_json_xml",
+    "compress_extract_zip",
+    "download_files",
+    "python_execution",
 ]

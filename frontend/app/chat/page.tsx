@@ -23,6 +23,7 @@ import {
   Square,
 } from 'lucide-react';
 import { chatApi, ConversationResponse, ConversationSummary, ChatMessage } from '@/lib/api/chat';
+import { parseUTCDate } from '@/lib/utils/date';
 import { modelsApi } from '@/lib/api/models';
 import { runtimeApi } from '@/lib/api/runtime';
 import { AIModelResponse, ModelRuntimeStatus } from '@/lib/api/types';
@@ -794,7 +795,7 @@ function ChatContent() {
                         )}
                         {msg.timestamp && (
                           <span>
-                            {new Date(msg.timestamp).toLocaleTimeString([], {
+                            {parseUTCDate(msg.timestamp).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
