@@ -1057,7 +1057,7 @@ export default function RuntimePage() {
                         <div className="p-2 rounded-lg bg-zinc-900 text-cyan-400 font-mono text-[11px] leading-relaxed break-all border border-zinc-800 select-all">
                           llama-server -m {selectedRuntimeModel || '&lt;model.gguf&gt;'} --port {runtimePort || 8080} -c {runtimeCtxSize || 4096} -ngl {runtimeGpuLayers}
                           {runtimeNCpuMoe !== '' ? ` --n-cpu-moe ${runtimeNCpuMoe}` : ''}
-                          {runtimeMmap ? ' --mmap' : ' --no-mmap'}
+                          {runtimeMmap ? ' --mmap' : ''}
                           {runtimeMlock ? ' --mlock' : ''}
                           {runtimeCacheK.trim() ? ` --cache-type-k ${runtimeCacheK.trim()}` : ''}
                           {runtimeCacheV.trim() ? ` --cache-type-v ${runtimeCacheV.trim()}` : ''}

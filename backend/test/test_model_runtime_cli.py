@@ -73,7 +73,8 @@ class TestModelRuntimeCLI(unittest.TestCase):
             )
 
         args = mock_popen.call_args[0][0]
-        self.assertIn("--no-mmap", args)
+        self.assertNotIn("--no-mmap", args)
+        self.assertNotIn("--mmap", args)
         self.assertNotIn("--mlock", args)
 
 if __name__ == "__main__":

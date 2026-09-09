@@ -230,8 +230,6 @@ class ModelRuntime:
 
             if mmap is True:
                 cmd.append("--mmap")
-            elif mmap is False:
-                cmd.append("--no-mmap")
 
             if mlock:
                 cmd.append("--mlock")
